@@ -36,12 +36,12 @@
     </span>
                 <span>&#160;</span>
 }
-@if (Model.StockStatus == StockStatus.OutOfStock)
+@if (Model.StockStatus != null && Model.StockStatus == StockStatus.OutOfStock)
 {
     <span class="label label-warning">@Html.Sitecore().Text("/Catalog/Search Results/Out of Stock", "Out of Stock")</span>
     <span>&#160;</span>
 }
-@if (Model.StockStatus == StockStatus.PreOrderable)
+@if (Model.StockStatus != null && Model.StockStatus == StockStatus.PreOrderable)
 {
     <span class="label label-info">@Html.Sitecore().Text("/Catalog/Search Results/Preorderable", "Pre-order")</span>
     <span>&#160;</span>

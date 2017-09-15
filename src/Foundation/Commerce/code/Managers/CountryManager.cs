@@ -24,9 +24,24 @@ namespace Sitecore.Foundation.Commerce.Managers
         public ManagerResponse<GetAvailableCountriesResult, Dictionary<string, string>> GetAvailableCountries()
         {
             var request = new GetAvailableCountriesRequest();
-            var result = OrderServiceProvider.GetAvailableCountries(request);
+            var result = new GetAvailableCountriesResult();
+            var cachedCountries = GetFromCache<GetAvailableCountriesResult>("GetAvailableCountriesResult");
+
+            if(cachedCountries != null)
+            {
+                result = cachedCountries;
+            }
+            else
+            {
+                result = OrderServiceProvider.GetAvailableCountries(request);
+                AddToCache("GetAvailableCountriesResult", result);
+            }
+
             result.WriteToSitecoreLog();
-            return new ManagerResponse<GetAvailableCountriesResult, Dictionary<string, string>>(result, new Dictionary<string, string>(result.AvailableCountries));
+
+            var response = new ManagerResponse<GetAvailableCountriesResult, Dictionary<string, string>>(result, new Dictionary<string, string>(result.AvailableCountries));
+            
+            return response;
         }
 
         public ManagerResponse<GetAvailableRegionsResult, Dictionary<string, string>> GetAvailableRegions(string countryCode)
@@ -34,11 +49,54 @@ namespace Sitecore.Foundation.Commerce.Managers
             Assert.ArgumentNotNullOrEmpty(countryCode, nameof(countryCode));
 
             var request = new GetAvailableRegionsRequest(countryCode);
-            var result = OrderServiceProvider.GetAvailableRegions(request);
+            var result = new GetAvailableRegionsResult();
+            var key = $"GetAvailableRegionsResult{countryCode}";
+
+            var cachedRegions = GetFromCache<GetAvailableRegionsResult>(key);
+
+            if (cachedRegions != null)
+            {
+                result = cachedRegions;
+            }
+            else
+            {
+                result = OrderServiceProvider.GetAvailableRegions(request);
+                AddToCache(key, result);
+            }
 
             result.WriteToSitecoreLog();
-            return new ManagerResponse<GetAvailableRegionsResult, Dictionary<string, string>>(result, new Dictionary<string, string>(result.AvailableRegions));
+
+            var response = new ManagerResponse<GetAvailableRegionsResult, Dictionary<string, string>>(result, new Dictionary<string, string>(result.AvailableRegions));
+            
+            return response;
         }
 
+        public static T GetFromCache<T>(string cacheKey)
+        {
+            var value = HttpRuntime.Cache[cacheKey];
+            if (value is T)
+                return (T) value;
+
+            return default(T);
+        }
+
+        public static T AddToCache<T>(string cacheKey, T value)
+        {
+            if (HttpRuntime.Cache.Get(cacheKey) != null)
+            {
+                HttpRuntime.Cache[cacheKey] = value;
+            }
+            else
+            {
+                HttpRuntime.Cache.Add(cacheKey,
+                                        value,
+                                        null,
+                                        System.Web.Caching.Cache.NoAbsoluteExpiration,
+                                        System.Web.Caching.Cache.NoSlidingExpiration,
+                                        System.Web.Caching.CacheItemPriority.Default,
+                                        null);
+            }
+            return value;
+        }
     }
 }

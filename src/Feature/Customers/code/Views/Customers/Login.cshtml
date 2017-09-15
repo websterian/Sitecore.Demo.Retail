@@ -1,0 +1,92 @@
+﻿@*//-----------------------------------------------------------------------
+// Copyright 2016 Sitecore Corporation A/S
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file
+// except in compliance with the License. You may obtain a copy of the License at
+//       http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software distributed under the
+// License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+// either express or implied. See the License for the specific language governing permissions
+// and limitations under the License.
+// -------------------------------------------------------------------------------------------*@
+@using Sitecore.Feature.Commerce.Customers.Models;
+@using Sitecore.Foundation.Commerce;
+@using Sitecore.Foundation.SitecoreExtensions.Extensions;
+@model LoginApiModel
+@{
+    var signing = @Html.Sitecore().CurrentItem[StorefrontConstants.KnownFieldNames.SigningButton];
+}
+
+@using (Html.BeginRouteForm(Sitecore.Mvc.Configuration.MvcSettings.SitecoreRouteName, new { ReturnUrl = ViewBag.ReturnUrl }))
+{
+    @Html.AntiForgeryToken()
+    @Html.ValidationSummary(true)
+
+    @Html.Sitecore().FormHandler()
+
+    <div class="wrap-main-content">
+        <!-- CONTENT CONTAINER -->
+        @if (Model != null && Model.Providers != null && Model.Providers.Count > 0)
+        { 
+         <div id="" class="row">
+            <div class="col-md-6">
+                <div class="row">
+                    @Model.Message
+                    <div class="col-md-12">
+                        <div id="providersSection">
+                            @Html.Sitecore().Field(StorefrontConstants.KnownFieldNames.FacebookText, Html.Sitecore().CurrentItem)
+                            <div id="" class="row">
+                                @foreach (var provider in Model.Providers)
+                                {
+                                    <div class="col-md-12">
+                                        <div class="form-group openid-connect">
+                                            <button name="provider" type="submit" onclick="window.location.href = '#'" class="btn btn-info" id="@provider.Name" value="@provider.Name" 
+                                                    style='background-image: url("@provider.Image.ImageUrl(28, 28)"); background-repeat: no-repeat'>
+                                                <div id="provider-name">&emsp;&nbsp;@provider.Name&nbsp;@Html.Sitecore().Field(StorefrontConstants.KnownFieldNames.SignInButton, Html.Sitecore().CurrentItem)</div>
+                                            </button>
+                                         </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                    @if(!Model.IsActivationFlow)
+                    {
+                    <div class="col-md-12">
+                        @Html.Sitecore().Field(StorefrontConstants.KnownFieldNames.LinkAccount, Html.Sitecore().CurrentItem)
+                        <div class="col-md-12">
+                            <a class="btn btn-primary" href="@("/UserPendingActivation")">
+                                @Html.Sitecore().Field(StorefrontConstants.KnownFieldNames.ActivationText, Html.Sitecore().CurrentItem)
+                            </a>
+                        </div>
+                    </div>
+                    }
+                </div>
+            </div>
+          
+          <div class="col-md-6">
+             <div class="row">
+                <div class="col-md-12 spot-single-image">
+                    @Html.Sitecore().Field("Image", Html.Sitecore().CurrentItem, new { Parameters = new Sitecore.Collections.SafeDictionary<string> { { "class", "img-responsive" } } })
+                </div>
+                <div class="col-md-12">
+                    <div class="form-inline">
+                        <div class="row">                            
+                            <div class="col-md-6 col-sm-6 col-xs-6">
+                                <button type="button" class="btn btn-primary pull-right" onclick="window.location.href = '@("/Checkout")'">@Html.Sitecore().Field(StorefrontConstants.KnownFieldNames.GuestCheckoutButton, Html.Sitecore().CurrentItem)</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+             </div>
+          </div>
+         </div>
+        }   
+    </div>      
+}
+
+<script type="text/javascript">
+  $(document).on('submit', 'form', function () {
+    $("#SignInButton").button('loading');
+  });
+</script>

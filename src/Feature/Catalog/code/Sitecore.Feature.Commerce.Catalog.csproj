@@ -159,6 +159,7 @@
   <ItemGroup>
     <Content Include="App_Config\Include\Feature\Feature.Commerce.Catalog.config" />
     <Content Include="App_Config\Include\Feature\Feature.Commerce.Catalog.Serialization.config" />
+    <Content Include="App_Config\Include\DynamicsRetail\DynamicsRetail.Connectors.Prices.config" />
     <None Include="Properties\PublishProfiles\Local.pubxml" />
     <Content Include="Scripts\Catalog\jsuri.js" />
     <Content Include="Scripts\Catalog\priceInfoViewModel.js" />

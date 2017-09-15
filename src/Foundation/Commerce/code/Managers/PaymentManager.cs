@@ -16,9 +16,10 @@
 // -------------------------------------------------------------------------------------------
 
 using System;
+using System.Web;
 using System.Collections.Generic;
 using System.Linq;
-using Sitecore.Commerce.Engine.Connect.Pipelines.Arguments;
+//using Sitecore.Commerce.Engine.Connect.Pipelines.Arguments;
 using Sitecore.Commerce.Entities.Payments;
 using Sitecore.Commerce.Services;
 using Sitecore.Commerce.Services.Payments;
@@ -26,7 +27,8 @@ using Sitecore.Diagnostics;
 using Sitecore.Foundation.Commerce.Extensions;
 using Sitecore.Foundation.Commerce.Models;
 using Sitecore.Foundation.Dictionary.Repositories;
-using GetPaymentMethodsRequest = Sitecore.Commerce.Engine.Connect.Services.Payments.GetPaymentMethodsRequest;
+using Sitecore.Commerce.Connect.DynamicsRetail.Services.Payments;
+//using GetPaymentMethodsRequest = Sitecore.Commerce.Engine.Connect.Services.Payments.GetPaymentMethodsRequest;
 
 namespace Sitecore.Foundation.Commerce.Managers
 {
@@ -69,35 +71,80 @@ namespace Sitecore.Foundation.Commerce.Managers
 
         public ManagerResponse<GetPaymentMethodsResult, IEnumerable<PaymentMethod>> GetPaymentMethods(string userId, PaymentOption paymentOption)
         {
-            Assert.ArgumentNotNull(paymentOption, nameof(paymentOption));
+            Assert.ArgumentNotNull(paymentOption, "paymentOption");
 
-            var result = new GetPaymentMethodsResult {Success = false};
-            var cartResult = CartManager.GetCart(userId);
-            if (!cartResult.ServiceProviderResult.Success || cartResult.Result == null)
-            {
-                result.SystemMessages.ToList().AddRange(cartResult.ServiceProviderResult.SystemMessages);
-                return new ManagerResponse<GetPaymentMethodsResult, IEnumerable<PaymentMethod>>(result, null);
-            }
-
-            var request = new GetPaymentMethodsRequest(cartResult.Result, paymentOption);
-            result = PaymentServiceProvider.GetPaymentMethods(request);
+            var request = new GetPaymentMethodsRequest(paymentOption);
+            var result = this.PaymentServiceProvider.GetPaymentMethods(request);
             result.WriteToSitecoreLog();
 
             return new ManagerResponse<GetPaymentMethodsResult, IEnumerable<PaymentMethod>>(result, result.PaymentMethods.ToList());
         }
 
-        public ManagerResponse<PaymentClientTokenResult, string> GetPaymentClientToken()
-        {
-            var request = new ServiceProviderRequest();
-            var result = PaymentServiceProvider.RunPipeline<ServiceProviderRequest, PaymentClientTokenResult>("commerce.payments.getClientToken", request);
-            result.WriteToSitecoreLog();
+        //public ManagerResponse<PaymentClientTokenResult, string> GetPaymentClientToken()
+        //{
+        //    var request = new ServiceProviderRequest();
+        //    var result = PaymentServiceProvider.RunPipeline<ServiceProviderRequest, PaymentClientTokenResult>("commerce.payments.getClientToken", request);
+        //    result.WriteToSitecoreLog();
 
-            return new ManagerResponse<PaymentClientTokenResult, string>(result, result.ClientToken);
-        }
+        //    return new ManagerResponse<PaymentClientTokenResult, string>(result, result.ClientToken);
+        //}
 
         public static string GetPaymentName(string paymentType)
         {
             return DictionaryPhraseRepository.Current.Get($"/Commerce/Payment/{paymentType}", $"[{paymentType}]");
+        }
+
+        /// <summary>
+        /// Gets the payment service URL.
+        /// </summary>       
+        /// <returns>PaymentService Url</returns>
+        public ManagerResponse<GetPaymentServiceUrlResult, string> GetPaymentServiceUrl(string userId)
+        {
+            var request = new GetPaymentServiceUrlRequest();
+            if (HttpContext.Current != null && HttpContext.Current.Request != null)
+            {
+                request.HostPageOrigin = string.Format(
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    "{0}://{1}",
+                    HttpContext.Current.Request.Url.Scheme,
+                    HttpContext.Current.Request.Url.Authority);
+            }
+
+            if (!Context.User.IsAuthenticated)
+            {
+                request.Properties["CartId"] = userId;
+            }
+
+            var result = this.PaymentServiceProvider.GetPaymentServiceUrl(request);
+
+            result.WriteToSitecoreLog();
+
+            return new ManagerResponse<GetPaymentServiceUrlResult, string>(result, result.Url ?? string.Empty);
+        }
+
+
+        /// <summary>
+        /// Gets the payment service action result.
+        /// </summary>
+        /// <param name="accessCode">The access code.</param>
+        /// <returns>
+        /// The Payment Service action result
+        /// </returns>
+        public ManagerResponse<GetPaymentServiceTokenizedResult, string> GetPaymentServiceActionResult(string accessCode)
+        {
+            Assert.ArgumentNotNull(accessCode, "accessCode");
+
+            var request = new GetPaymentServiceActionResultRequest
+            {
+                Locale = Context.Culture.Name,
+                PaymentAcceptResultAccessCode = accessCode
+            };
+
+            var result = this.PaymentServiceProvider.RunPipeline<GetPaymentServiceActionResultRequest, GetPaymentServiceTokenizedResult>(Sitecore.Commerce.Pipelines.PipelineName.GetPaymentServiceActionResult, request);
+
+            result.WriteToSitecoreLog();
+
+            return new ManagerResponse<GetPaymentServiceTokenizedResult, string>(result, result.CardToken);
         }
     }
 }

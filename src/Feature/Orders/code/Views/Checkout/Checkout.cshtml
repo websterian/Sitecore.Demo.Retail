@@ -325,17 +325,15 @@
             <div class="row">
                 <div class="col-md-10 col-md-offset-1">
 
-                    <form>
                         <div class="show-payment">
                             <div>
                                 <div id="dropin-container"></div>
                             </div>
                         </div>
-
+                        <iframe id="cardPaymentAcceptFrame" style="height: 360px;width: 100%;border:0px" sandbox="allow-scripts allow-forms allow-same-origin" data-bind="attr: { src: model.PaymentUrl }"></iframe>
                         <div id="btn-billing-next" class="btn btn-success pull-right" style="margin-top:24px">
-                            <button id="ToConfirmButton" data-loading-text="processing" class="btn btn-lg btn-success">Complete Order <span class="glyphicon glyphicon-chevron-right"></span></button>
+                            <button id="ToConfirmButton" data-loading-text="processing" onclick="submitCardPayment()" class="btn btn-lg btn-success">Complete Order <span class="glyphicon glyphicon-chevron-right"></span></button>
                         </div>
-                    </form>
                 </div>
             </div>
         </div>
@@ -343,7 +341,6 @@
 </div>
 </div>
 
-<script src="https://js.braintreegateway.com/js/braintree-2.27.0.min.js"></script>
 <script src="/Scripts/Orders/main.js"></script>
 
 <script>
@@ -528,28 +525,28 @@
         ko.cleanNode(rendering[0]);
         ko.applyBindings(model, rendering[0]);
 
-        braintree.setup(model.PaymentClientToken, "dropin", {
-            container: "dropin-container",
-            paymentMethodNonceReceived: function (event, nonce) {
-                if (nonce.length > 0) {
-                    model.cardPaymentResultAccessCode = nonce;
-                    model.cardPaymentAcceptCardPrefix = "paypal";
-                    setPaymentMethodsSinglePageCheckout();
-                }
-            },
-            paypal: {
-                singleUse: true,
-                amount: 10.00,
-                currency: 'USD',
-                onSuccess: function (nonce, email) {
-                    if (nonce.length > 0) {
-                        model.cardPaymentResultAccessCode = nonce;
-                        model.cardPaymentAcceptCardPrefix = "paypal";
-                        setPaymentMethodsSinglePageCheckout();
-                    }
-                }
-            }
-        });
+        //braintree.setup(model.PaymentClientToken, "dropin", {
+        //    container: "dropin-container",
+        //    paymentMethodNonceReceived: function (event, nonce) {
+        //        if (nonce.length > 0) {
+        //            model.CardPaymentResultAccessCode = nonce;
+        //            model.cardPaymentAcceptCardPrefix = "paypal";
+        //            setPaymentMethodsSinglePageCheckout();
+        //        }
+        //    },
+        //    paypal: {
+        //        singleUse: true,
+        //        amount: 10.00,
+        //        currency: 'USD',
+        //        onSuccess: function (nonce, email) {
+        //            if (nonce.length > 0) {
+        //                model.CardPaymentResultAccessCode = nonce;
+        //                model.cardPaymentAcceptCardPrefix = "paypal";
+        //                setPaymentMethodsSinglePageCheckout();
+        //            }
+        //        }
+        //    }
+        //});
     }
 
     function changeBillingAddress() {
@@ -587,7 +584,7 @@
 
     function getCountryElement(countryCode) {
         return _.find(Object.keys(model.CountriesRegions), function(c) {
-            return c.substr(0, 2) == countryCode;
+            return c.substr(0, 3) == countryCode;
         });
     }
 
@@ -716,6 +713,75 @@
 
     var model = @Html.Raw(JsonConvert.SerializeObject(Model));
     applyModel();
+
+    //D365 >>>
+    removeCardPaymentAcceptListener();
+    addCardPaymentAcceptListener();
+
+    function addCardPaymentAcceptListener() {
+        window.addEventListener("message", this.cardPaymentAcceptMessageHandler, false);
+    }
+
+
+    function removeCardPaymentAcceptListener() {
+        window.removeEventListener("message", this.cardPaymentAcceptMessageHandler, false);
+    }
+
+    function submitCardPayment() {
+        if (!model.CardPaymentResultAccessCode) {
+            if (model.MessageOrigin) {
+                //Send a message to the card page to trigger submit
+                var cardPaymentAcceptIframe = document.getElementById("cardPaymentAcceptFrame");
+                var cardPaymentAcceptMessage = {
+                    type: "msax-cc-submit",
+                    value: "true"
+                };
+                cardPaymentAcceptIframe.contentWindow.postMessage(JSON.stringify(cardPaymentAcceptMessage), model.MessageOrigin);
+            }
+        }
+    };
+
+    function cardPaymentAcceptMessageHandler(eventInfo) {
+        // Validate origin
+        if (!eventInfo || !(model.MessageOrigin.indexOf(eventInfo.origin) === 0)) {
+            return;
+        }
+
+        // Parse messages
+        var message = eventInfo.data;
+        if (typeof (message) === "string" && message.length > 0) {
+
+            // Handle various messages from the card payment accept page
+            var messageObject = JSON.parse(message);        
+            switch (messageObject.type) {
+                case "msax-cc-height":           
+                    var cardPaymentAcceptIframe = $("cardPaymentAcceptFrame");
+                    cardPaymentAcceptIframe.height = messageObject.value;
+                    break;
+                case "msax-cc-cardprefix":            
+                    model.cardPaymentAcceptCardPrefix = messageObject.value;
+                    break;
+                case "msax-cc-error":
+                    // Handle retrieve card payment accept result failure.
+                    var paymentErrors = messageObject.value;
+                    var errors = [];
+                    for (var i = 0; i < paymentErrors.length; i++) {
+                        errors.push(!paymentErrors[i].Message ? paymentErrors[i].Code.toString() : paymentErrors[i].Message);
+                    }
+                    showErrors("Error processing payment", errors);
+                    break;
+                case "msax-cc-result":            
+                    model.CardPaymentResultAccessCode = messageObject.value;
+                    setPaymentMethodsSinglePageCheckout();
+                    break;
+                default:
+                    // Ignore all other messages.
+            }
+        }
+    }
+
+    //D365 <<<
+    
     if (model.DefaultAddress != null)
         setShippingAddress();
 
@@ -723,9 +789,9 @@
         var data = "{";
 
         var creditCard = {
-            "CardToken": model.cardPaymentResultAccessCode,
+            "CardToken": model.CardPaymentResultAccessCode,
             "Amount": model.Cart.Total.Amount,
-            "CardPaymentAcceptCardPrefix": "paypal"
+            "CardPaymentAcceptCardPrefix": model.cardPaymentAcceptCardPrefix
         };
 
         if (data.length > 1) {
@@ -772,9 +838,9 @@
         var data = "{";
         data += '"userEmail": "' + model.email + '"';
         var creditCard = {
-            "CardToken": model.cardPaymentResultAccessCode,
+            "CardToken": model.CardPaymentResultAccessCode,
             "Amount": model.Cart.Total.Amount,
-            "CardPaymentAcceptCardPrefix": "paypal"
+            "CardPaymentAcceptCardPrefix": model.cardPaymentAcceptCardPrefix
         };
 
         if (data.length > 1) {

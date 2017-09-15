@@ -2,8 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using Sitecore.Commerce.Connect.CommerceServer.Orders.Models;
-using Sitecore.Commerce.Engine.Connect.Entities.Carts;
-using Sitecore.Commerce.Engine.Connect.Pipelines.Customers;
 using Sitecore.Commerce.Entities.Carts;
 using Sitecore.Commerce.Entities.GiftCards;
 using Sitecore.Commerce.Entities.Orders;
@@ -176,7 +174,8 @@ namespace Sitecore.Feature.Commerce.Orders.Repositories
                     ProductColor = orderLine.Product.Properties["Color"]?.ToString(),
                     ShippingMethodName = shippingInfo?.Properties["ShippingMethodName"]?.ToString(),
                     ShippingAddress = GetShippingAddress(commerceOrder, shippingInfo),
-                    ShippingEmail = shippingInfo?.ElectronicDeliveryEmail,
+                    //TODO : Convert for D365
+                    //ShippingEmail = shippingInfo?.ElectronicDeliveryEmail,
                     ItemPrice = orderLine.Product.Price.Amount,
                     Total = orderLine.Total.Amount,
                     Currency = orderLine.Total.CurrencyCode,
@@ -187,7 +186,7 @@ namespace Sitecore.Feature.Commerce.Orders.Repositories
             }
         }
 
-        private IParty GetShippingAddress(CommerceOrder commerceOrder, CommerceShippingInfo shippingInfo)
+        private IParty GetShippingAddress(CommerceOrder commerceOrder, ShippingInfo shippingInfo)
         {
             var linePartyId = shippingInfo?.PartyID;
             if (string.IsNullOrEmpty(linePartyId))
@@ -195,12 +194,12 @@ namespace Sitecore.Feature.Commerce.Orders.Repositories
             return commerceOrder.Parties.FirstOrDefault(p => p.ExternalId.Equals(linePartyId, StringComparison.OrdinalIgnoreCase))?.ToEntity();
         }
 
-        private static CommerceShippingInfo GetOrderLineShippingInfo(CommerceOrder commerceOrder, CartLine orderLine)
+        private static ShippingInfo GetOrderLineShippingInfo(CommerceOrder commerceOrder, CartLine orderLine)
         {
-            var uniqueShippingInfo = commerceOrder.Shipping.FirstOrDefault(shipping => shipping.LineIDs.ToList().Contains(orderLine.ExternalCartLineId) && shipping.LineIDs.Count == 1) as CommerceShippingInfo;
+            var uniqueShippingInfo = commerceOrder.Shipping.FirstOrDefault(shipping => shipping.LineIDs.ToList().Contains(orderLine.ExternalCartLineId) && shipping.LineIDs.Count == 1);
             if (uniqueShippingInfo != null)
                 return uniqueShippingInfo;
-            return commerceOrder.Shipping.FirstOrDefault(s => s.LineIDs.Contains(orderLine.ExternalCartLineId)) as CommerceShippingInfo;
+            return commerceOrder.Shipping.FirstOrDefault(s => s.LineIDs.Contains(orderLine.ExternalCartLineId));
         }
 
         private MediaItem GetProductImage(CartLine orderLine)

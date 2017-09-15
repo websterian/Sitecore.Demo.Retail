@@ -21,9 +21,11 @@ using System.Linq;
 using Sitecore.Commerce.Connect.CommerceServer;
 using Sitecore.Commerce.Connect.CommerceServer.Orders.Models;
 using Sitecore.Commerce.Connect.CommerceServer.Orders.Pipelines;
-using Sitecore.Commerce.Engine.Connect.Pipelines.Arguments;
+//using Sitecore.Commerce.Engine.Connect.Pipelines.Arguments;
 using Sitecore.Commerce.Entities.Orders;
-using Sitecore.Commerce.Entities.Shipping;
+using Sitecore.Commerce.Entities.Carts;
+using Sitecore.Commerce.Entities.GiftCards;
+using Sitecore.Commerce.Entities.LoyaltyPrograms;
 using Sitecore.Commerce.Services;
 using Sitecore.Commerce.Services.Carts;
 using Sitecore.Commerce.Services.Orders;
@@ -84,7 +86,25 @@ namespace Sitecore.Foundation.Commerce.Managers
 
             cart.Email = inputModel.UserEmail;
 
-            var request = new SubmitVisitorOrderRequest(cart);
+            var payments = new List<PaymentInfo>();
+            if (inputModel.FederatedPayment != null && !string.IsNullOrEmpty(inputModel.FederatedPayment.CardToken))
+            {
+                payments.Add(ToCreditCardPaymentInfo(inputModel.FederatedPayment));
+            }
+
+            if (inputModel.GiftCardPayment != null && !string.IsNullOrEmpty(inputModel.GiftCardPayment.PaymentMethodID))
+            {
+                payments.Add(ToGiftCardPaymentInfo(inputModel.GiftCardPayment));
+            }
+
+            //if (inputModel.LoyaltyCardPayment != null && !string.IsNullOrEmpty(inputModel.LoyaltyCardPayment.PaymentMethodID))
+            //{
+            //    payments.Add(ToLoyaltyCardPaymentInfo(inputModel.LoyaltyCardPayment));
+            //}
+
+            cart.Payment = payments.ToList().AsReadOnly();
+
+            var request = new Sitecore.Commerce.Connect.DynamicsRetail.Services.Orders.SubmitVisitorOrderRequest(cart, cart.Email);
             RefreshCartOnOrdersRequest(request);
             errorResult = OrderServiceProvider.SubmitVisitorOrder(request);
             if (errorResult.Success && errorResult.Order != null && errorResult.CartWithErrors == null)
@@ -112,6 +132,56 @@ namespace Sitecore.Foundation.Commerce.Managers
             return new ManagerResponse<SubmitVisitorOrderResult, CommerceOrder>(errorResult,
                                                                                 errorResult.Order as CommerceOrder);
         }
+
+        /// <summary>
+        /// To the credit card payment information.
+        /// </summary>
+        /// <param name="item">The item.</param>
+        /// <returns>The CommerceCreditCardPaymentInfo instance.</returns>
+        public static FederatedPaymentInfo ToCreditCardPaymentInfo(FederatedPaymentInputModelItem item)
+        {
+            var paymentInfo = new FederatedPaymentInfo
+            {
+                Amount = item.Amount,
+                CardToken = item.CardToken,
+                PaymentMethodID = item.PaymentMethodID
+            };
+
+            paymentInfo.Properties.Add("CardPaymentAcceptCardPrefix", item.CardPaymentAcceptCardPrefix);
+            return paymentInfo;
+        }
+
+        /// <summary>
+        /// To the gift card payment information.
+        /// </summary>
+        /// <param name="item">The item.</param>
+        /// <returns>The CommerceGiftCardPaymentInfo instance.</returns>
+        public static GiftCardPaymentInfo ToGiftCardPaymentInfo(GiftCardPaymentInputModelItem item)
+        {
+            var paymentInfo = new GiftCardPaymentInfo
+            {
+                Amount = item.Amount,
+                PaymentMethodID = item.PaymentMethodID
+            };
+
+            return paymentInfo;
+        }
+
+        /// <summary>
+        /// To the loyalty card payment information.
+        /// </summary>
+        /// <param name="item">The item.</param>
+        /// <returns>The CommerceLoyaltyCardPaymentInfo instance.</returns>
+        //public static LoyaltyCardPaymentInfo ToLoyaltyCardPaymentInfo(LoyaltyCardPaymentInputModelItem item)
+        //{
+        //    var paymentInfo = new LoyaltyCardPaymentInfo
+        //    {
+        //        Amount = item.Amount,
+        //        PaymentMethodID = item.PaymentMethodID
+        //    };
+
+        //    return paymentInfo;
+        //}
 
         public CartRequestInformation RefreshCartOnOrdersRequest(OrdersRequest request)
         {
@@ -159,21 +229,21 @@ namespace Sitecore.Foundation.Commerce.Managers
 
         public ManagerResponse<CartResult, CommerceCart> Reorder(string userId, ReorderInputModel inputModel)
         {
-            Assert.ArgumentNotNull(inputModel, nameof(inputModel));
-            Assert.ArgumentNotNullOrEmpty(inputModel.OrderId, nameof(inputModel.OrderId));
+            //Assert.ArgumentNotNull(inputModel, nameof(inputModel));
+            //Assert.ArgumentNotNullOrEmpty(inputModel.OrderId, nameof(inputModel.OrderId));
 
-            var request = new ReorderByCartNameRequest
-            {
-                CustomerId = userId,
-                OrderId = inputModel.OrderId,
-                ReorderLineExternalIds = inputModel.ReorderLineExternalIds,
-                CartName = CommerceConstants.CartSettings.DefaultCartName,
-                OrderShippingPreferenceType = ShippingOptionType.ShipToAddress
-            };
+            //var request = new ReorderByCartNameRequest
+            //{
+            //    CustomerId = userId,
+            //    OrderId = inputModel.OrderId,
+            //    ReorderLineExternalIds = inputModel.ReorderLineExternalIds,
+            //    CartName = CommerceConstants.CartSettings.DefaultCartName,
+            //    OrderShippingPreferenceType = ShippingOptionType.ShipToAddress
+            //};
 
-            var result = OrderServiceProvider.Reorder(request);
-            result.WriteToSitecoreLog();
-            return new ManagerResponse<CartResult, CommerceCart>(result, result.Cart as CommerceCart);
+            //var result = OrderServiceProvider.Reorder(request);
+            //result.WriteToSitecoreLog();
+            return new ManagerResponse<CartResult, CommerceCart>(null, null);
         }
 
         public ManagerResponse<VisitorCancelOrderResult, bool> CancelOrder(string userId, CancelOrderInputModel inputModel)
@@ -211,6 +281,28 @@ namespace Sitecore.Foundation.Commerce.Managers
             var result = OrderServiceProvider.GetVisitorOrder(request);
             result.WriteToSitecoreLog();
             return new ManagerResponse<GetVisitorOrderResult, CommerceOrder>(result, result.Order as CommerceOrder);
+        }
+
+        /// <summary>
+        /// Gets the orders.
+        /// </summary>
+        /// <param name="customerId">The customer identifier.</param>
+        /// <param name="shopName">Name of the shop.</param>
+        /// <returns>The manager response where list of order headers are returned in the Result.</returns>
+        public ManagerResponse<GetVisitorOrdersResult, IEnumerable<OrderHeader>> GetOrders(string customerId, string shopName)
+        {
+            Assert.ArgumentNotNullOrEmpty(customerId, "customerId");
+            Assert.ArgumentNotNullOrEmpty(shopName, "shopName");
+
+            var request = new GetVisitorOrdersRequest(customerId, shopName);
+            var result = this.OrderServiceProvider.GetVisitorOrders(request);
+            if (result.Success && result.OrderHeaders != null && result.OrderHeaders.Count > 0)
+            {
+                return new ManagerResponse<GetVisitorOrdersResult, IEnumerable<OrderHeader>>(result, result.OrderHeaders.ToList());
+            }
+
+            result.WriteToSitecoreLog();
+            return new ManagerResponse<GetVisitorOrdersResult, IEnumerable<OrderHeader>>(result, new List<OrderHeader>());
         }
 
         public static string GetOrderStatusName(string orderStatus)

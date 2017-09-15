@@ -21,7 +21,7 @@ using System.Drawing;
 using System.Globalization;
 using System.Linq;
 using Sitecore.Commerce.Connect.CommerceServer.Orders.Models;
-using Sitecore.Commerce.Engine.Connect.Entities.Carts;
+//using Sitecore.Commerce.Engine.Connect.Entities.Carts;
 using Sitecore.Commerce.Entities;
 using Sitecore.Commerce.Entities.Carts;
 using Sitecore.Commerce.Entities.GiftCards;
@@ -31,6 +31,8 @@ using Sitecore.Foundation.Commerce.Models.InputModels;
 
 namespace Sitecore.Foundation.Commerce.Extensions
 {
+    using Sitecore.Commerce.Connect.DynamicsRetail.Entities.Carts;
+
     public static class InputModelExtension
     {
         public static List<CommerceCartLine> ToCommerceCartLines(this IEnumerable<CartLineInputModelItem> items)
@@ -84,6 +86,7 @@ namespace Sitecore.Foundation.Commerce.Extensions
                 City = party.City,
                 RegionCode = party.Region,
                 ZipPostalCode = party.ZipPostalCode,
+                Country = party.Country,
                 CountryCode = party.Country,
                 PartyId = party.PartyId,
                 State = party.Region

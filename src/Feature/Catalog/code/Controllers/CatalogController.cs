@@ -865,7 +865,7 @@ namespace Sitecore.Feature.Commerce.Catalog.Controllers
 
                     var targetItemId = new ID(relationshipInfo.ToItemExternalId);
                     var targetItem = Context.Database.GetItem(targetItemId);
-                    var productModel = ProductViewModelFactory.Create(targetItem);
+                    var productModel = ProductViewModelFactory.Create(targetItem, false, false);
 
                     relationshipModel.ChildProducts.Add(productModel);
                 }

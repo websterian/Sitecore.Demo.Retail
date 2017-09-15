@@ -7,7 +7,7 @@ DB: master
 SharedFields:
 - ID: "8bbc9900-067f-40ea-8500-8b2c247636f7"
   Hint: Catalog
-  Value: Habitat_Master
+  Value: Contoso Base Catalog
 Languages:
 - Language: "de-DE"
   Fields:
@@ -30,7 +30,7 @@ Languages:
     Fields:
     - ID: "25bed78c-4957-4165-998a-ca1b52f67497"
       Hint: __Created
-      Value: 20131204T085348
+      Value: 20131204T135348Z
     - ID: "5dd74568-4d4b-44c1-b513-0af5f4cda34f"
       Hint: __Created by
       Value: |

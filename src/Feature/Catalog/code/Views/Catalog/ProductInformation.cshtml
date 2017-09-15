@@ -29,16 +29,7 @@
     </div>
 
     <div id="price-info" class="m-b-1">
-        <div id="priceWithSavings">
-            <h3 class="price-now">
-                <span id="priceNow" data-bind="text: priceNow"></span>
-                <span class="savings" id="savings" data-bind="text: savingsMessage"></span>
-            </h3>
-            <del class="price-before text-muted" id="price-before" data-bind="text: priceBefore"></del>
-        </div>
-        <div id="priceOnly">
-            <h3 class="price-now" id="price" data-bind="text: priceNow"></h3>
-        </div>
+        @Html.Partial("~/Views/Catalog/_ProductPrice.cshtml", Model)
     </div>
 
     <input type="hidden" value="@Model.ProductId" id="product-id"/>

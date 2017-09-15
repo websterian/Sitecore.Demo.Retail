@@ -44,6 +44,24 @@ namespace Sitecore.Feature.Commerce.Customers
                     apiInfo.Url,
                     new {controller = apiInfo.Controller, action = apiInfo.Action, id = UrlParameter.Optional});
             }
+
+            routes.MapRoute(
+                name: "logoff",
+                url: "logoff",
+                defaults: new { controller = "Customers", action = "LogOff", storefront = UrlParameter.Optional }
+            );
+
+            routes.MapRoute(
+               name: "oauthv2redirect",
+               url: "oauthv2redirect",
+               defaults: new { controller = "Customers", action = "OAuthV2Redirect", userName = UrlParameter.Optional, siteName = UrlParameter.Optional }
+            );
+
+            routes.MapRoute(
+               name: "acsredirect",
+               url: "acsredirect",
+               defaults: new { controller = "Customers", action = "AcsRedirect", userName = UrlParameter.Optional, siteName = UrlParameter.Optional }
+            );
         }
     }
 }
