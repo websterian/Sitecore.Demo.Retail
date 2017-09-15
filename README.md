@@ -1,7 +1,7 @@
-# Sitecore.Demo.Retail
-Habitat Retail Demo site - Sitecore Commerce Demo Site
+# Sitecore.Demo.Retail (Dynamics 365 for operations)
+Habitat Retail Demo site for Dynamics 365 for operations - Sitecore Commerce Demo Site
 
-The Sitecore Retail Demo is a demonstration of the Sitecore Commerce product including business scenarios as well as an example implementation of the integrated [Sitecore Commerce](https://dev.sitecore.net/Downloads/Sitecore_Commerce.aspx) and [Sitecore Experience Platform](https://dev.sitecore.net/Downloads/Sitecore_Experience_Platform.aspx).
+The Sitecore Retail Demo is a demonstration of the Sitecore Commerce powered by Dynamics 365 product including business scenarios as well as an example implementation of the integrated [Sitecore Commerce](https://dev.sitecore.net/Downloads/Sitecore_Commerce.aspx) and [Sitecore Experience Platform](https://dev.sitecore.net/Downloads/Sitecore_Experience_Platform.aspx).
 
 The implementation is based on the Sitecore Helix principles and is extending the [Sitecore Habitat solution](https://github.com/Sitecore/Habitat).
 
