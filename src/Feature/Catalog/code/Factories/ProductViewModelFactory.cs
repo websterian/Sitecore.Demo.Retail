@@ -53,7 +53,7 @@ namespace Sitecore.Feature.Commerce.Catalog.Factories
             return Create(RenderingContext.Current.Rendering.Item);
         }
 
-        public ProductViewModel Create(Item item)
+        public ProductViewModel Create(Item item, bool loadPrice = true, bool loadStock = true)
         {
             if (item == null)
             {
@@ -83,8 +83,13 @@ namespace Sitecore.Feature.Commerce.Catalog.Factories
             productViewModel.ProductName = productViewModel.Title;
 
             PopulateCategoryInformation(productViewModel);
-            PopulateStockInformation(productViewModel);
-            PopulatePriceInformation(productViewModel);
+
+            if(loadStock)
+                PopulateStockInformation(productViewModel);
+
+            if(loadPrice)
+                PopulatePriceInformation(productViewModel);
+
             PopulateRatings(productViewModel);
             PopulateImages(productViewModel);
 
@@ -160,20 +165,28 @@ namespace Sitecore.Feature.Commerce.Catalog.Factories
 
         public static ProductViewModel GetFromCache(string cacheKey)
         {
+            var value = HttpRuntime.Cache[cacheKey];
+            if (value is ProductViewModel)
+                return value as ProductViewModel;
+
             return HttpContext.Current?.Items[cacheKey] as ProductViewModel;
         }
 
         public static ProductViewModel AddToCache(string cacheKey, ProductViewModel value)
         {
-            if (HttpContext.Current == null)
-                return value;
-            if (HttpContext.Current.Items.Contains(cacheKey))
+            if (HttpRuntime.Cache.Get(cacheKey) != null)
             {
-                HttpContext.Current.Items[cacheKey] = value;
+                HttpRuntime.Cache[cacheKey] = value;
             }
             else
             {
-                HttpContext.Current.Items.Add(cacheKey, value);
+                HttpRuntime.Cache.Add(  cacheKey,
+                                        value,
+                                        null,
+                                        System.Web.Caching.Cache.NoAbsoluteExpiration,
+                                        System.Web.Caching.Cache.NoSlidingExpiration,
+                                        System.Web.Caching.CacheItemPriority.Default,
+                                        null);
             }
             return value;
         }

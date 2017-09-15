@@ -30,7 +30,7 @@ namespace Sitecore.Feature.Commerce.Catalog.Services
             {
                 return GetProductOverlayImage(productOverlaysItem, Templates.ProductOverlayImages.Fields.OnSaleOverlayImage);
             }
-            if (product.StockStatus == StockStatus.OutOfStock)
+            if (product.StockStatus != null && product.StockStatus == StockStatus.OutOfStock)
             {
                 return GetProductOverlayImage(productOverlaysItem, Templates.ProductOverlayImages.Fields.OutOfStockOverlayImage);
             }
@@ -38,7 +38,7 @@ namespace Sitecore.Feature.Commerce.Catalog.Services
             {
                 return GetProductOverlayImage(productOverlaysItem, Templates.ProductOverlayImages.Fields.AlmostOutOfStockLimit);
             }
-            if (product.StockStatus == StockStatus.PreOrderable)
+            if (product.StockStatus != null && product.StockStatus == StockStatus.PreOrderable)
             {
                 return GetProductOverlayImage(productOverlaysItem, Templates.ProductOverlayImages.Fields.PreorderOverlayImage);
             }

@@ -129,7 +129,7 @@ namespace Sitecore.Feature.Commerce.Orders.Models
             TotalDiscount = totalSavings.ToCurrency();
 
             var commerceCart = cart as CommerceCart;
-            if (commerceCart?.OrderForms.Count > 0)
+            if (commerceCart.OrderForms != null && commerceCart.OrderForms.Count > 0)
             {
                 foreach (var promoCode in commerceCart.OrderForms[0].PromoCodes ?? Enumerable.Empty<string>())
                 {

@@ -26,10 +26,11 @@ using Sitecore.Foundation.Commerce.Extensions;
 using Sitecore.Foundation.Commerce.Models;
 using Sitecore.Foundation.Commerce.Models.InputModels;
 using Sitecore.Foundation.Dictionary.Repositories;
-using GetShippingMethodsRequest = Sitecore.Commerce.Engine.Connect.Services.Shipping.GetShippingMethodsRequest;
 
 namespace Sitecore.Foundation.Commerce.Managers
 {
+    using Sitecore.Commerce.Connect.DynamicsRetail.Services.Shipping;
+
     public class ShippingManager : IManager
     {
         public ShippingManager(ShippingServiceProvider shippingServiceProvider, CartManager cartManager)
@@ -75,12 +76,15 @@ namespace Sitecore.Foundation.Commerce.Managers
             var cart = cartResult.Result;
             var preferenceType = InputModelExtension.GetShippingOptionType(inputModel.ShippingPreferenceType);
 
-            var request = new GetShippingMethodsRequest(new ShippingOption {ShippingOptionType = preferenceType}, inputModel.ShippingAddress?.ToParty(), cart)
+            var request = new GetDeliveryMethodsRequest(
+                new ShippingOption { ShippingOptionType = preferenceType },
+                (inputModel.ShippingAddress != null) ? inputModel.ShippingAddress.ToParty() : null)
             {
-                Lines = inputModel.Lines?.ToCommerceCartLines()
+                Cart = cart,
+                Lines = (inputModel.Lines != null) ? inputModel.Lines.ToCommerceCartLines() : null
             };
 
-            result = ShippingServiceProvider.GetShippingMethods<Sitecore.Commerce.Services.Shipping.GetShippingMethodsRequest, GetShippingMethodsResult>(request);
+            result = this.ShippingServiceProvider.GetShippingMethods<GetShippingMethodsRequest, GetShippingMethodsResult>(request);
             return new ManagerResponse<GetShippingMethodsResult, IReadOnlyCollection<ShippingMethod>>(result, result.ShippingMethods);
         }
 

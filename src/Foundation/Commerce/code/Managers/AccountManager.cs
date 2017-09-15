@@ -42,18 +42,26 @@ namespace Sitecore.Foundation.Commerce.Managers
 {
     public class AccountManager : IManager
     {
-        public AccountManager(CustomerServiceProvider customerServiceProvider, ContactFactory contactFactory, MailManager mailManager, StorefrontContext storefrontContext)
+        public AccountManager(CartManager cartManager, CustomerServiceProvider customerServiceProvider, ContactFactory contactFactory, MailManager mailManager, StorefrontContext storefrontContext)
         {
             CustomerServiceProvider = customerServiceProvider;
             ContactFactory = contactFactory;
             MailManager = mailManager;
             StorefrontContext = storefrontContext;
+            this.CartManager = cartManager;
         }
 
         private MailManager MailManager { get; }
         private CustomerServiceProvider CustomerServiceProvider { get; }
         private ContactFactory ContactFactory { get; }
         private StorefrontContext StorefrontContext { get; }
+        /// <summary>
+        /// Gets or sets the cart manager.
+        /// </summary>
+        /// <value>
+        /// The cart manager.
+        /// </value>
+        public CartManager CartManager { get; set; }
 
 #warning Refactor to use Habitat login
         public bool Login(string userName, string password, bool persistent)
@@ -73,6 +81,41 @@ namespace Sitecore.Foundation.Commerce.Managers
             return true;
         }
 
+        public virtual bool Login(string userName, bool persistent)
+        {
+            Assert.ArgumentNotNullOrEmpty(userName, nameof(userName));
+
+            //TODO : Merge carts
+            if (!AuthenticationManager.Login(userName, persistent))
+            {
+                return false;
+            }
+            if (Tracker.Current != null)
+            {
+                Tracker.Current.Session.Identify(userName);
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Initiates the link to existing customer.
+        /// </summary>
+        /// <param name="emailOfExistingCustomer">The email of existing customer.</param>
+        /// <returns>
+        /// The manager response where the customer is returned in the response.
+        /// </returns>
+        public virtual ManagerResponse<EnableCustomerResult, CommerceCustomer> InitiateLinkToExistingCustomer(string emailOfExistingCustomer)
+        {
+            Assert.ArgumentNotNullOrEmpty(emailOfExistingCustomer, "emailOfExistingCustomer");
+
+            var customer = new CommerceCustomer() { Name = emailOfExistingCustomer };
+            var request = new EnableCustomerRequest(customer);
+            request.Comment = "Initiate";
+            var result = this.CustomerServiceProvider.EnableCustomer(request);
+            return new ManagerResponse<EnableCustomerResult, CommerceCustomer>(result, result.CommerceCustomer);
+        }
+
 #warning Refactor to use Habitat logout
         public void Logout()
         {
@@ -80,6 +123,7 @@ namespace Sitecore.Foundation.Commerce.Managers
             {
                 Tracker.Current.EndVisit(true);
             }
+            System.Web.HttpContext.Current.Session.Abandon();
             AuthenticationManager.Logout();
         }
 
@@ -179,6 +223,20 @@ namespace Sitecore.Foundation.Commerce.Managers
             return GetParties(new CommerceCustomer {ExternalId = getUserResponse.Result.ExternalId});
         }
 
+        /// <summary>
+        /// Gets the customer.
+        /// </summary>
+        /// <returns>
+        /// The manager response where the customer is returned in the response.
+        /// </returns>
+        public virtual ManagerResponse<GetCustomerResult, CommerceCustomer> GetCustomer()
+        {
+            // externaId is not user, put some for argument null check. AX7 user is authenticated with token.
+            var request = new GetCustomerRequest("11111");
+            var result = this.CustomerServiceProvider.GetCustomer(request);
+            return new ManagerResponse<GetCustomerResult, CommerceCustomer>(result, result.CommerceCustomer);
+        }
+
         public ManagerResponse<CustomerResult, bool> RemoveParties(CommerceCustomer user, List<CommerceParty> parties)
         {
             Assert.ArgumentNotNull(user, nameof(user));
@@ -247,13 +305,9 @@ namespace Sitecore.Foundation.Commerce.Managers
 #warning Refactor to use Habitat register
         public ManagerResponse<CreateUserResult, CommerceUser> RegisterUser(RegisterUserInputModel inputModel)
         {
-            Assert.ArgumentNotNull(inputModel, nameof(inputModel));
-            Assert.ArgumentNotNullOrEmpty(inputModel.UserName, nameof(inputModel.UserName));
-            Assert.ArgumentNotNullOrEmpty(inputModel.Password, nameof(inputModel.Password));
-            if (StorefrontContext.Current == null)
-            {
-                throw new InvalidOperationException("Cannot be called without a valid storefront context.");
-            }
+            Assert.ArgumentNotNull(inputModel, "inputModel");
+            Assert.ArgumentNotNullOrEmpty(inputModel.FirstName, "inputModel.FirstName");
+            Assert.ArgumentNotNullOrEmpty(inputModel.LastName, "inputModel.LastName");
 
             CreateUserResult result;
 
@@ -261,26 +315,16 @@ namespace Sitecore.Foundation.Commerce.Managers
             try
             {
                 var request = new CreateUserRequest(inputModel.UserName, inputModel.Password, inputModel.UserName, StorefrontContext.Current.ShopName);
-                result = CustomerServiceProvider.CreateUser(request);
-                result.WriteToSitecoreLog();
-
-                if (result.Success && result.CommerceUser == null && !result.SystemMessages.Any())
-                {
-                    // Connect bug:  This is a work around to a Connect bug.  When the user already exists,connect simply aborts the pipeline but
-                    // does not set the success flag nor does it return an error message.
-                    result.Success = false;
-                    result.SystemMessages.Add(new SystemMessage
-                    {
-                        Message = DictionaryPhraseRepository.Current.Get("/System Messages/Accounts/User Already Exists", "User name already exists. Please enter a different user name.")
-                    });
-                }
+                request.Properties.Add("FirstName", inputModel.FirstName);
+                request.Properties.Add("LastName", inputModel.LastName);
+                result = this.CustomerServiceProvider.CreateUser(request);
             }
             catch (MembershipCreateUserException e)
             {
-                result = new CreateUserResult {Success = false};
-                result.SystemMessages.Add(new SystemMessage {Message = ErrorCodeToString(e.StatusCode)});
+                result = new CreateUserResult { Success = false };
+                result.SystemMessages.Add(new SystemMessage { Message = ErrorCodeToString(e.StatusCode) });
             }
-
+            result.WriteToSitecoreLog();
             return new ManagerResponse<CreateUserResult, CommerceUser>(result, result.CommerceUser);
         }
 

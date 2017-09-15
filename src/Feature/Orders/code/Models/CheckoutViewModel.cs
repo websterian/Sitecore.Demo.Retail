@@ -45,5 +45,9 @@ namespace Sitecore.Feature.Commerce.Orders.Models
         public IParty DefaultAddress { get; set; }
 
         public string UserName { get; set; }
+
+        public string PaymentUrl { get; set; }
+        public string MessageOrigin { get; set; }
+        public string CardPaymentResultAccessCode { get; set; }
     }
 }

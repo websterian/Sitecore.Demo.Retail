@@ -18,14 +18,15 @@
 using System;
 using System.Collections.Generic;
 using Sitecore.Commerce.Entities.Prices;
+using Sitecore.Commerce.Connect.CommerceServer.Orders.Models;
 using Sitecore.Commerce.Services;
 using Sitecore.Commerce.Services.Prices;
 using Sitecore.Diagnostics;
 using Sitecore.Foundation.Commerce.Extensions;
 using Sitecore.Foundation.Commerce.Models;
 using Sitecore.Web;
-using GetProductBulkPricesRequest = Sitecore.Commerce.Engine.Connect.Services.Prices.GetProductBulkPricesRequest;
-using GetProductPricesRequest = Sitecore.Commerce.Engine.Connect.Services.Prices.GetProductPricesRequest;
+//using GetProductBulkPricesRequest = Sitecore.Commerce.Engine.Connect.Services.Prices.GetProductBulkPricesRequest;
+//using GetProductPricesRequest = Sitecore.Commerce.Engine.Connect.Services.Prices.GetProductPricesRequest;
 using GetSupportedCurrenciesRequest = Sitecore.Foundation.Commerce.Infrastructure.Connect.Arguments.GetSupportedCurrenciesRequest;
 
 namespace Sitecore.Foundation.Commerce.Managers
@@ -55,13 +56,13 @@ namespace Sitecore.Foundation.Commerce.Managers
                 priceTypeIds = _defaultPriceTypeIds;
             }
 
-            var request = new GetProductPricesRequest(catalogName, productId, priceTypeIds)
+            var request = new GetProductPricesRequest(productId, priceTypeIds)
             {
                 DateTime = GetCurrentDate()
             };
 
             request.UserId = userId;
-            request.IncludeVariantPrices = includeVariants;
+            
             request.CurrencyCode = CurrencyManager.CurrencyContext.CurrencyCode;
             var result = PricingServiceProvider.GetProductPrices(request);
 
@@ -79,10 +80,9 @@ namespace Sitecore.Foundation.Commerce.Managers
                 priceTypeIds = _defaultPriceTypeIds;
             }
 
-            var request = new GetProductBulkPricesRequest(catalogName, productIds, priceTypeIds)
+            var request = new Models.GetProductBulkPricesRequest(catalogName, productIds)
             {
-                CurrencyCode = CurrencyManager.CurrencyContext.CurrencyCode,
-                DateTime = GetCurrentDate()
+                CurrencyCode = CurrencyManager.CurrencyContext.CurrencyCode
             };
 
             var result = PricingServiceProvider.GetProductBulkPrices(request);

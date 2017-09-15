@@ -23,7 +23,9 @@ using System.Web.Helpers;
 using Sitecore.Commerce.Connect.CommerceServer.Inventory.Models;
 using Sitecore.Commerce.Connect.CommerceServer.Search;
 using Sitecore.Commerce.Connect.CommerceServer.Search.Models;
-using Sitecore.Commerce.Engine.Connect.Entities.Prices;
+//using Sitecore.Commerce.Engine.Connect.Entities.Prices;
+using Sitecore.Commerce.Connect.DynamicsRetail.Entities.Carts;
+using Sitecore.Commerce.Connect.CommerceServer.Orders.Models;
 using Sitecore.Commerce.Entities.Inventory;
 using Sitecore.Commerce.Entities.Prices;
 using Sitecore.Commerce.Services.Catalog;
@@ -175,7 +177,7 @@ namespace Sitecore.Foundation.Commerce.Managers
             Price price;
             if (pricesResponse.Result.TryGetValue(productViewModel.ProductId, out price))
             {
-                var extendedPrice = (ExtendedCommercePrice) price;
+                var extendedPrice = (CommercePrice) price;
                 productViewModel.ListPrice = price.Amount;
                 productViewModel.AdjustedPrice = extendedPrice.ListPrice;
             }
@@ -192,7 +194,7 @@ namespace Sitecore.Foundation.Commerce.Managers
                     continue;
                 }
 
-                var extendedPrice = (ExtendedCommercePrice) price;
+                var extendedPrice = (CommercePrice) price;
                 variant.ListPrice = extendedPrice.Amount;
                 variant.AdjustedPrice = extendedPrice.ListPrice;
             }
@@ -220,14 +222,14 @@ namespace Sitecore.Foundation.Commerce.Managers
                     continue;
                 }
 
-                var extendedPrice = (ExtendedCommercePrice) price;
+                var extendedPrice = (CommercePrice) price;
 
                 product.ListPrice = extendedPrice.Amount;
                 product.AdjustedPrice = extendedPrice.ListPrice;
 
-                product.LowestPricedVariantAdjustedPrice = extendedPrice.LowestPricedVariant;
-                product.LowestPricedVariantListPrice = extendedPrice.LowestPricedVariantListPrice;
-                product.HighestPricedVariantAdjustedPrice = extendedPrice.HighestPricedVariant;
+                //product.LowestPricedVariantAdjustedPrice = extendedPrice.LowestPricedVariant;
+                //product.LowestPricedVariantListPrice = extendedPrice.LowestPricedVariantListPrice;
+                //product.HighestPricedVariantAdjustedPrice = extendedPrice.HighestPricedVariant;
             }
         }
 

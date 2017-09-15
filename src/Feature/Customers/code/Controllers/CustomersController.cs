@@ -16,15 +16,21 @@
 // -------------------------------------------------------------------------------------------
 
 using System;
+using System.Globalization;
 using System.Collections.Generic;
 using System.Linq;
 using System.Web.Mvc;
 using System.Web.UI;
+using System.IO;
+using System.Web;
 using Sitecore.Configuration;
+using Sitecore.Exceptions;
 using Sitecore.Diagnostics;
 using Sitecore.Feature.Commerce.Customers.Models;
 using Sitecore.Foundation.Commerce;
 using Sitecore.Foundation.Commerce.Extensions;
+using Sitecore.Foundation.Commerce.Configuration;
+using Sitecore.Foundation.Commerce.Util;
 using Sitecore.Foundation.Commerce.Managers;
 using Sitecore.Foundation.Commerce.Models;
 using Sitecore.Foundation.Commerce.Models.InputModels;
@@ -33,6 +39,14 @@ using Sitecore.Foundation.Dictionary.Repositories;
 using Sitecore.Foundation.SitecoreExtensions.Attributes;
 using Sitecore.Links;
 using Sitecore.Mvc.Controllers;
+using Sitecore.Mvc.Presentation;
+using Sitecore.Data.Items;
+using System.IdentityModel.Tokens;
+using System.Security.Claims;
+using System.Text;
+using Sitecore.Commerce.Entities;
+using Sitecore.Commerce.Entities.Customers;
+using Microsoft.IdentityModel.Protocols;
 
 namespace Sitecore.Feature.Commerce.Customers.Controllers
 {
@@ -59,8 +73,12 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
         public StorefrontContext StorefrontContext { get; }
         public int MaxNumberOfAddresses => Settings.GetIntSetting("Commerce.MaxNumberOfAddresses", 10);
 
+        /// <summary>
+        /// Handles a user trying to log off
+        /// </summary>
+        /// <returns>The view to display to the user after logging off</returns>
         [HttpGet]
-        [OutputCache(NoStore = true, Location = OutputCacheLocation.None)]
+        [Authorize]
         public ActionResult LogOff()
         {
             if (!Context.User.IsAuthenticated)
@@ -71,21 +89,343 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
             return View();
         }
 
+        /// <summary>
+        /// Federateds the signout.
+        /// </summary>
+        /// <returns>Current rendering view</returns>
         [HttpGet]
         [AllowAnonymous]
-        public ActionResult LogOffAndRedirect()
+        [OutputCache(NoStore = true, Location = OutputCacheLocation.None)]
+        public ActionResult FederatedSignOut()
         {
-            AccountManager.Logout();
+            IdentityProviderClientConfigurationElement providerClient = OpenIdConnectUtilities.GetCurrentProviderSettings();
+            Uri externalLogOffUri = providerClient.LogOffUrl;
 
-            return RedirectToLocal("/");
+            OpenIdConnectUtilities.RemoveCookie(OpenIdConnectUtilities.CookieCurrentProvider);
+            OpenIdConnectUtilities.RemoveCookie(OpenIdConnectUtilities.CookieCurrentProviderType);
+            OpenIdConnectUtilities.CleanUpOnSignOutOrAuthFailure(this.HttpContext);
+
+            var model = new FederatedSignOutApiModel() { LogOffUri = externalLogOffUri };
+            return View(model);
+        }
+
+        public static void RemoveCookie(HttpContextBase context, string cookieName)
+        {
+            context.Request.Cookies.Remove(cookieName);
+            HttpCookie expiredCookie = new HttpCookie(cookieName)
+            {
+                Expires = DateTime.UtcNow.AddDays(-1),
+                Value = null
+            };
+
+            context.Response.SetCookie(expiredCookie);
         }
 
         [HttpGet]
         [AllowAnonymous]
-        [OutputCache(NoStore = true, Location = OutputCacheLocation.None)]
-        public ActionResult Register()
+        public ActionResult LogOffAndRedirect()
         {
-            return View();
+            if (Context.User.IsAuthenticated)
+            {
+                var ctx = Request.GetOwinContext();
+                var cookies = ctx.Response.Cookies;
+
+                ctx.Authentication.SignOut(OpenIdConnectUtilities.ApplicationCookieAuthenticationType);
+
+                // Clean up openId nonce cookie. This is just a workaround. Ideally, we should be calling 'ctx.Authentication.SignOut(providerClient.Name)'              
+                foreach (string cookieName in ControllerContext.HttpContext.Request.Cookies.AllKeys)
+                {
+                    if (cookieName.StartsWith("OpenIdConnect.nonce.", StringComparison.OrdinalIgnoreCase))
+                    {
+                        OpenIdConnectUtilities.RemoveCookie(cookieName);
+                    }
+                }
+            }
+
+            this.AccountManager.Logout();
+            return Redirect("/federatedSignout");
+        }
+
+        /// <summary>
+        /// An action to handle displaying the login form
+        /// </summary>
+        /// <param name="returnUrl">A location to redirect the user to</param>
+        /// <param name="existingAccount">The existing account.</param>
+        /// <param name="externalIdProvider">The external identifier provider.</param>
+        /// <returns>
+        /// The view to display to the user
+        /// </returns>
+        [HttpGet]
+        [AllowAnonymous]
+        [OutputCache(NoStore = true, Location = OutputCacheLocation.None)]
+        public ActionResult Login(string returnUrl, string existingAccount, string externalIdProvider)
+        {
+            if (Context.User.IsAuthenticated)
+            {
+                return Redirect("/accountmanagement");
+            }
+
+            ViewBag.ReturnUrl = returnUrl;
+
+            var model = new LoginApiModel();
+            model.IsActivationFlow = !string.IsNullOrEmpty(existingAccount);
+
+            if (model.IsActivationFlow)
+            {
+                string message = string.Format(
+                    CultureInfo.CurrentCulture,
+                    "Congratulations! We were able to successfully link your '{0}' account with the {1} account belonging to '{2}'. Please sign in to access your account.",
+                    Context.Site.Name,
+                    externalIdProvider,
+                    existingAccount);
+                model.Message = message;
+            }
+
+            List<IdentityProviderApiModel> providers = new List<IdentityProviderApiModel>();
+            IDictionary<string, IdentityProviderClientConfigurationElement> identityProviderDictionary = GetIdentityProvidersFromConfig();
+            foreach (IdentityProviderClientConfigurationElement provider in identityProviderDictionary.Values)
+            {
+                MediaItem providerImage = Sitecore.Context.Database.GetItem(provider.ImageUrl.OriginalString);
+                providers.Add(new IdentityProviderApiModel() { Name = provider.Name, Image = providerImage });
+            }
+
+            model.Providers.AddRange(providers);
+            return View(model);
+        }
+
+        /// <summary>
+        /// Handles a user trying to login
+        /// </summary>
+        /// <param name="provider">The name of the open Id provider</param>
+        /// <returns>The view to display to the user</returns>     
+        [HttpPost]
+        [AllowAnonymous]
+        [ValidateAntiForgeryToken]
+        [ActionName("Login")]
+        [OutputCache(NoStore = true, Location = OutputCacheLocation.None)]
+        public ActionResult LoginPost(string provider)
+        {
+            IdentityProviderClientConfigurationElement providerConfig = OpenIdConnectUtilities.GetIdentityProviderFromConfiguration(provider);
+            switch (providerConfig.ProviderType)
+            {
+                case IdentityProviderType.OpenIdConnect:
+                    ControllerContext.HttpContext.GetOwinContext().Authentication.Challenge(providerConfig.Name);
+                    return new HttpUnauthorizedResult();
+
+                case IdentityProviderType.ACS:
+                    // Storing cookie with current provider (used in Logoff).
+                    OpenIdConnectUtilities.SetCookie(this.HttpContext, OpenIdConnectUtilities.CookieCurrentProvider, providerConfig.Name);
+                    OpenIdConnectUtilities.SetCookie(this.HttpContext, OpenIdConnectUtilities.CookieCurrentProviderType, providerConfig.ProviderType.ToString());
+
+                    string url = string.Format(CultureInfo.InvariantCulture, "{0}v2/wsfederation?wa=wsignin1.0&wtrealm={1}", providerConfig.Issuer, providerConfig.RedirectUrl);
+                    Response.Redirect(url, true);
+                    break;
+
+                default:
+                    SecurityException securityException = new SecurityException(string.Format(CultureInfo.InvariantCulture, "The identity provider type {0} is not supported", providerConfig.ProviderType));
+                    throw securityException;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Action invoked on being redirected from open identity provider.
+        /// </summary>
+        /// <returns>View after being redirected from open identity provider.</returns>
+        /// <exception cref="System.NotSupportedException">Thrown when email claim does not exist.</exception>
+        public ActionResult OAuthV2Redirect()
+        {
+            IdentityProviderClientConfigurationElement currentProvider = OpenIdConnectUtilities.GetCurrentProviderSettings();
+
+            // Check whether provider returned an error which could be a case if a user rejected a consent.           
+            string errorCode = this.HttpContext.Request.Params["error"];
+            if (errorCode != null)
+            {
+                string message = string.Format(
+                    CultureInfo.CurrentCulture,
+                    "The provider {0} returned error code {1} while processing user's credentials.",
+                    currentProvider.Name,
+                    errorCode);
+                this.Response.Redirect("~", false);
+                this.HttpContext.ApplicationInstance.CompleteRequest();
+                return null;
+            }
+
+            string authorizationCode = OpenIdConnectUtilities.ValidateRequestAndGetAuthorizationCode();
+
+            if (authorizationCode == null)
+            {
+                string message = "Unable to find the authorization code for the login request.";
+                SecurityException securityException = new SecurityException(message);
+                throw securityException;
+            }
+
+            string bodyParameters = string.Format(
+                CultureInfo.InvariantCulture,
+                "grant_type=authorization_code&code={0}&redirect_uri={1}&client_id={2}&client_secret={3}",
+                authorizationCode,
+                currentProvider.RedirectUrl,
+                currentProvider.ClientId,
+                currentProvider.ClientSecret);
+
+            OpenIdConnectConfiguration providerDiscoveryDocument = OpenIdConnectUtilities.GetDiscoveryDocument(currentProvider.Issuer);
+
+            string returnValuesJson = OpenIdConnectUtilities.HttpPost(new Uri(providerDiscoveryDocument.TokenEndpoint), bodyParameters);
+
+            TokenEndpointResponse tokenResponse = OpenIdConnectUtilities.DeserilizeJson<TokenEndpointResponse>(returnValuesJson);
+
+            JwtSecurityToken token = OpenIdConnectUtilities.GetIdToken(tokenResponse.IdToken);
+
+            Claim emailClaim = token.Claims.SingleOrDefault(c => string.Equals(c.Type, OpenIdConnectUtilities.Email, StringComparison.OrdinalIgnoreCase));
+
+            string email = null;
+
+            // IdentityServer does not return email claim.
+            if (emailClaim != null)
+            {
+                email = emailClaim.Value;
+            }
+
+            return this.GetRedirectionBasedOnAssociatedCustomer(tokenResponse.IdToken, currentProvider.ProviderType, email);
+        }
+
+        /// <summary>
+        /// Action invoked on being redirected from ACS identity provider.
+        /// </summary>
+        /// <returns>View after being redirected from ACS identity provider.</returns>
+        /// <exception cref="System.NotSupportedException">Thrown when email claim does not exist.</exception>        
+        public ActionResult AcsRedirect()
+        {
+            string documentContents;
+            using (Stream receiveStream = this.HttpContext.Request.InputStream)
+            {
+                StreamReader readStream = new StreamReader(receiveStream, Encoding.UTF8);
+                documentContents = readStream.ReadToEnd();
+            }
+
+            string acsToken = OpenIdConnectUtilities.GetAcsToken(documentContents);
+
+            JwtSecurityToken token = new JwtSecurityToken(acsToken);
+            var emailClaim = token.Claims.FirstOrDefault(t => t.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress");
+
+            string email = null;
+
+            // Not all providers provide the claim, for instance, Windows Live ID does not.
+            if (emailClaim != null)
+            {
+                email = emailClaim.Value;
+            }
+
+            return this.GetRedirectionBasedOnAssociatedCustomer(acsToken, IdentityProviderType.ACS, email);
+        }
+
+        private ActionResult GetRedirectionBasedOnAssociatedCustomer(string authToken, IdentityProviderType identityProviderType, string email)
+        {
+            OpenIdConnectUtilities.SetTokenCookie(authToken);
+
+            var customerResult = AccountManager.GetCustomer().ServiceProviderResult;
+            CommerceCustomer customer = customerResult.CommerceCustomer;
+            if (customerResult.Success && customer != null)
+            {
+                if (identityProviderType == IdentityProviderType.OpenIdConnect)
+                {
+                    OpenIdConnectUtilities.RemoveCookie(OpenIdConnectUtilities.CookieState);
+                    OpenIdConnectUtilities.RemoveCookie(OpenIdConnectUtilities.CookieNonce);
+                }
+
+                return this.RegisterExistingUser(customer);
+            }
+            else
+            {
+                string url = string.Format(CultureInfo.InvariantCulture, "/Register?isActivationPending={0}&email={1}", customerResult.Properties["IsRequestToLinkToExistingCustomerPending"], email);
+                return Redirect(url);
+            }
+        }
+
+        /// <summary>
+        /// Registers the specified user.
+        /// </summary>
+        /// <param name="commerceUser">The commerce user.</param>
+        /// <returns>
+        /// Redirects to the Home page after registration
+        /// </returns>
+        [HttpGet]
+        [AllowAnonymous]
+        [OutputCache(NoStore = true, Location = OutputCacheLocation.None)]
+        public ActionResult RegisterExistingUser(CommerceCustomer commerceUser)
+        {
+            try
+            {
+                Assert.ArgumentNotNull(commerceUser, "commerceUser");
+                RegisterBaseResultApiModel result = new RegisterBaseResultApiModel();
+
+                var userResponse = this.AccountManager.GetUser(commerceUser.Name);
+                if (userResponse.Result == null)
+                {
+                    // create the user in Sitecore
+                    var inputModel = new RegisterUserInputModel { UserName = commerceUser.Name, Password = System.Web.Security.Membership.GeneratePassword(8, 4) };
+                    inputModel.FirstName = commerceUser.Properties["FirstName"] as string ?? string.Empty;
+                    inputModel.LastName = commerceUser.Properties["LastName"] as string ?? string.Empty;
+                    var response = this.AccountManager.RegisterUser(inputModel);
+                    if (!response.ServiceProviderResult.Success || response.Result == null)
+                    {
+                        result.SetErrors(response.ServiceProviderResult);
+                        return Json(result, JsonRequestBehavior.AllowGet);
+                    }
+                }
+
+                var isLoggedIn = this.AccountManager.Login(commerceUser.Name, false);
+                if (isLoggedIn)
+                {
+                    return Redirect("/");
+                }
+                else
+                {
+                    result.SetErrors(new List<string> { "Could not create user" });
+                }
+
+                return Json(result);
+            }
+            catch (Sitecore.Commerce.OpenIDConnectionClosedUnexpectedlyException)
+            {
+                this.CleanNotAuthorizedSession();
+                return Redirect("/login");
+            }
+            catch (Exception e)
+            {
+                return Json(new ErrorApiModel("Register", e), JsonRequestBehavior.AllowGet);
+            }
+        }
+
+        public virtual void CleanNotAuthorizedSession()
+        {
+            var ctx = Request.GetOwinContext();
+            ctx.Authentication.SignOut(OpenIdConnectUtilities.ApplicationCookieAuthenticationType);
+            OpenIdConnectUtilities.RemoveCookie(OpenIdConnectUtilities.OpenIdCookie);
+
+            // Clean up openId nonce cookie. This is just a workaround. Ideally, we should be calling 'ctx.Authentication.SignOut(providerClient.Name)'              
+            foreach (string cookieName in ControllerContext.HttpContext.Request.Cookies.AllKeys)
+            {
+                if (cookieName.StartsWith("OpenIdConnect.nonce.", StringComparison.OrdinalIgnoreCase))
+                {
+                    OpenIdConnectUtilities.RemoveCookie(cookieName);
+                    break;
+                }
+            }
+        }
+
+        private static IDictionary<string, IdentityProviderClientConfigurationElement> GetIdentityProvidersFromConfig()
+        {
+            IDictionary<string, IdentityProviderClientConfigurationElement> identityProvierLookUp = new Dictionary<string, IdentityProviderClientConfigurationElement>();
+
+            RetailConfiguration retailConfiguration = (RetailConfiguration) OpenIdConnectUtilities.DynamicsConnectorConfiguration.GetSection(OpenIdConnectUtilities.ConfigurationSectionName);
+            foreach (IdentityProviderClientConfigurationElement provider in retailConfiguration.IdentityProviders)
+            {
+                identityProvierLookUp.Add(provider.Name, provider);
+            }
+
+            return identityProvierLookUp;
         }
 
         [HttpGet]
@@ -161,34 +501,100 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
         [ValidateAntiForgeryToken]
         [OutputCache(NoStore = true, Location = OutputCacheLocation.None)]
         [SkipAnalyticsTracking]
-        public JsonResult Register(RegisterUserInputModel inputModel)
+        public ActionResult Register(RegisterUserInputModel inputModel)
         {
+            RegisterBaseResultApiModel result = new RegisterBaseResultApiModel();
             try
             {
-                Assert.ArgumentNotNull(inputModel, nameof(inputModel));
-                var result = this.CreateJsonResult<RegisterApiModel>();
-                if (result.HasErrors)
-                {
-                    return Json(result, JsonRequestBehavior.AllowGet);
-                }
+                Assert.ArgumentNotNull(inputModel, "RegisterInputModel");
 
-                var response = AccountManager.RegisterUser(inputModel);
-                if (response.ServiceProviderResult.Success && response.Result != null)
+                if (string.Equals(inputModel.SignupSelection, "NewAccount", StringComparison.OrdinalIgnoreCase))
                 {
-                    result.Initialize(response.Result);
-                    AccountManager.Login(response.Result.UserName, inputModel.Password, false);
+                    inputModel.Password = System.Web.Security.Membership.GeneratePassword(8, 4);
+                    var response = this.AccountManager.RegisterUser(inputModel);
+                    if (response.ServiceProviderResult.Success && response.Result != null)
+                    {
+                        var isLoggedIn = this.AccountManager.Login(response.Result.UserName, false);
+                        if (!isLoggedIn)
+                        {
+                            result.Success = false;
+                            result.SetErrors(new List<string> { "Could not create user" });
+                        }
+                    }
+                    else
+                    {
+                        result.Success = false;
+                        result.SetErrors(response.ServiceProviderResult);
+                    }
+
+                    return Json(result, JsonRequestBehavior.AllowGet);
                 }
                 else
                 {
-                    result.SetErrors(response.ServiceProviderResult);
-                }
+                    string emailOfExistingCustomer = inputModel.LinkupEmail;
 
-                return Json(result);
+                    var response = this.AccountManager.InitiateLinkToExistingCustomer(emailOfExistingCustomer);
+                    if (response.ServiceProviderResult.Success && response.Result != null)
+                    {
+                        ////Clean up auth cookies completely. We need to be signed out.
+                        OpenIdConnectUtilities.RemoveCookie(OpenIdConnectUtilities.CookieCurrentProvider);
+                        OpenIdConnectUtilities.RemoveCookie(OpenIdConnectUtilities.CookieCurrentProviderType);
+                        OpenIdConnectUtilities.RemoveCookie(OpenIdConnectUtilities.OpenIdCookie);
+
+                        result.UserName = response.Result.Name;
+                        result.IsSignupFlow = true;
+                        return Json(result, JsonRequestBehavior.AllowGet);
+                    }
+                    else
+                    {
+                        result.Success = false;
+                        result.SetErrors(response.ServiceProviderResult);
+                        return Json(result, JsonRequestBehavior.AllowGet);
+                    }
+                }
             }
-            catch (Exception e)
+            catch (AggregateException ex)
             {
-                return Json(new ErrorApiModel("Register", e), JsonRequestBehavior.AllowGet);
+                result.Success = false;
+                result.SetErrors(StorefrontConstants.KnownActionNames.RegisterActionName, ex.InnerExceptions[0]);
+                return Json(result, JsonRequestBehavior.AllowGet);
             }
+            catch (Sitecore.Commerce.OpenIDConnectionClosedUnexpectedlyException)
+            {
+                this.CleanNotAuthorizedSession();
+                return Redirect("/login");
+            }
+            catch (Exception ex)
+            {
+                result.Success = false;
+                result.SetErrors(StorefrontConstants.KnownActionNames.RegisterActionName, ex);
+                return Json(result, JsonRequestBehavior.AllowGet);
+            }
+        }
+
+        /// <summary>
+        /// Starts the sign up process.
+        /// </summary>
+        /// <param name="email">The email address from external identifier.</param>
+        /// <param name="isActivationPending">if set to <c>true</c> [is activation pending].</param>
+        /// <returns>
+        /// The view for entering sign up information.
+        /// </returns>
+        [HttpGet]
+        [AllowAnonymous]
+        public ActionResult Register(string email, bool? isActivationPending)
+        {
+            RegisterViewModel registerViewModel = new RegisterViewModel()
+            {
+                UserName = email
+            };
+
+            if (isActivationPending == true)
+            {
+                registerViewModel.Errors.Add("A previous request to link this user to an exiting account is already pending. Any new actions will override the previous request.");
+            }
+
+            return View(registerViewModel);
         }
 
         [HttpPost]
@@ -266,12 +672,18 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
         [SkipAnalyticsTracking]
         public JsonResult AddressList()
         {
+            var result = new AddressListItemApiModel();
             try
             {
-                var result = new AddressListItemApiModel();
-                var addresses = AllAddresses(result);
-                var countries = GetAvailableCountries(result);
+                
+                var addresses = this.AllAddresses(result);
+                var countries = this.GetAvailableCountries(result);
                 result.Initialize(addresses, countries);
+                return Json(result, JsonRequestBehavior.AllowGet);
+            }
+            catch (Sitecore.Commerce.OpenIDConnectionClosedUnexpectedlyException)
+            {
+                this.CleanNotAuthorizedSession();
                 return Json(result, JsonRequestBehavior.AllowGet);
             }
             catch (Exception e)
@@ -332,48 +744,64 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
                 }
 
                 var addresses = new List<IParty>();
+                var user = CommerceUserContext.Current;
                 var result = new AddressListItemApiModel();
-                if (CommerceUserContext.Current != null)
+                
+                var customer = new CommerceCustomer { ExternalId = user.UserId };
+                var party = new Party
                 {
-                    var user = CommerceUserContext.Current;
-                    if (string.IsNullOrEmpty(model.ExternalId))
+                    ExternalId = model.ExternalId,
+                    FirstName = model.Name,
+                    LastName = string.Empty,
+                    Address1 = model.Address1,
+                    City = model.City,
+                    Country = model.Country,
+                    State = model.State,
+                    ZipPostalCode = model.ZipPostalCode,
+                    PartyId = model.PartyId,
+                    IsPrimary = model.IsPrimary
+                };
+
+                if (string.IsNullOrEmpty(party.ExternalId))
+                {
+                    // Verify we have not reached the maximum number of addresses supported.
+                    int numberOfAddresses = this.AllAddresses(result).Count;
+                    if (numberOfAddresses >= MaxNumberOfAddresses)
                     {
-                        // Verify we have not reached the maximum number of addresses supported.
-                        var numberOfAddresses = AllAddresses(result).Count;
-                        if (numberOfAddresses >= MaxNumberOfAddresses)
-                        {
-                            var message = DictionaryPhraseRepository.Current.Get("/Accounts/Max Address Limit Reached", "The maximum number of addresses ({0}) has been reached.");
-                            result.Errors.Add(string.Format(message, numberOfAddresses));
-                            result.Success = false;
-                        }
-                        else
-                        {
-                            model.ExternalId = Guid.NewGuid().ToString("B");
-
-                            var response = AccountManager.AddParties(user.UserName, new List<IParty> { model });
-                            result.SetErrors(response.ServiceProviderResult);
-                            if (response.ServiceProviderResult.Success)
-                            {
-                                addresses = AllAddresses(result);
-                            }
-
-                            result.Initialize(addresses, null);
-                        }
+                        var message = "Address limit reached";
+                        result.Errors.Add(string.Format(CultureInfo.InvariantCulture, message, numberOfAddresses));
+                        result.Success = false;
                     }
                     else
                     {
-                        var response = AccountManager.UpdateParties(user.UserName, new List<IParty> { model });
+                        var response = AccountManager.AddParties(user.UserName, new List<IParty> { model });
                         result.SetErrors(response.ServiceProviderResult);
                         if (response.ServiceProviderResult.Success)
                         {
-                            addresses = AllAddresses(result);
+                            addresses = this.AllAddresses(result);
                         }
 
                         result.Initialize(addresses, null);
                     }
                 }
+                else
+                {
+                    var response = AccountManager.UpdateParties(user.UserName, new List<IParty> { model });
+                    result.SetErrors(response.ServiceProviderResult);
+                    if (response.ServiceProviderResult.Success)
+                    {
+                        addresses = this.AllAddresses(result);
+                    }
+
+                    result.Initialize(addresses, null);
+                }
 
                 return Json(result, JsonRequestBehavior.AllowGet);
+            }
+            catch (Sitecore.Commerce.OpenIDConnectionClosedUnexpectedlyException e)
+            {
+                this.CleanNotAuthorizedSession();
+                return Json(new ErrorApiModel("Login", e), JsonRequestBehavior.AllowGet);
             }
             catch (Exception e)
             {
