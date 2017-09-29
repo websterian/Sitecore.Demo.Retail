@@ -8,7 +8,6 @@
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file 
 // except in compliance with the License. You may obtain a copy of the License at
 //       http://www.apache.org/licenses/LICENSE-2.0
-//
 // Unless required by applicable law or agreed to in writing, software distributed under the 
 // License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, 
 // either express or implied. See the License for the specific language governing permissions 
@@ -16,55 +15,56 @@
 // -------------------------------------------------------------------------------------------
 
 using System;
-using System.Globalization;
 using System.Collections.Generic;
+using System.Globalization;
+using System.IdentityModel.Tokens;
+using System.IO;
 using System.Linq;
+using System.Security.Claims;
+using System.Text;
+using System.Web;
 using System.Web.Mvc;
 using System.Web.UI;
-using System.IO;
-using System.Web;
+
+using Microsoft.IdentityModel.Protocols;
+
+using Sitecore.Commerce.Entities;
+using Sitecore.Commerce.Entities.Customers;
 using Sitecore.Configuration;
-using Sitecore.Exceptions;
+using Sitecore.Data.Items;
 using Sitecore.Diagnostics;
+using Sitecore.Exceptions;
 using Sitecore.Feature.Commerce.Customers.Models;
 using Sitecore.Foundation.Commerce;
-using Sitecore.Foundation.Commerce.Extensions;
 using Sitecore.Foundation.Commerce.Configuration;
-using Sitecore.Foundation.Commerce.Util;
+using Sitecore.Foundation.Commerce.Extensions;
 using Sitecore.Foundation.Commerce.Managers;
 using Sitecore.Foundation.Commerce.Models;
 using Sitecore.Foundation.Commerce.Models.InputModels;
-using Sitecore.Foundation.Commerce.Repositories;
-using Sitecore.Foundation.Dictionary.Repositories;
+using Sitecore.Foundation.Commerce.Util;
 using Sitecore.Foundation.SitecoreExtensions.Attributes;
 using Sitecore.Links;
 using Sitecore.Mvc.Controllers;
-using Sitecore.Mvc.Presentation;
-using Sitecore.Data.Items;
-using System.IdentityModel.Tokens;
-using System.Security.Claims;
-using System.Text;
-using Sitecore.Commerce.Entities;
-using Sitecore.Commerce.Entities.Customers;
-using Microsoft.IdentityModel.Protocols;
 
 namespace Sitecore.Feature.Commerce.Customers.Controllers
 {
+    using Sitecore.Commerce;
+
     public class CustomersController : SitecoreController
     {
         public enum ManageMessageId
         {
-            ChangePasswordSuccess,
-            SetPasswordSuccess,
+            ChangePasswordSuccess, 
+            SetPasswordSuccess, 
             RemoveLoginSuccess
         }
 
         public CustomersController(AccountManager accountManager, CountryManager countryManager, CommerceUserContext commerceUserContext, StorefrontContext storefrontContext)
         {
-            AccountManager = accountManager;
-            CommerceUserContext = commerceUserContext;
-            StorefrontContext = storefrontContext;
-            CountryManager = countryManager;
+            this.AccountManager = accountManager;
+            this.CommerceUserContext = commerceUserContext;
+            this.StorefrontContext = storefrontContext;
+            this.CountryManager = countryManager;
         }
 
         private CountryManager CountryManager { get; }
@@ -83,10 +83,10 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
         {
             if (!Context.User.IsAuthenticated)
             {
-                return Redirect("/login");
+                return this.Redirect("/login");
             }
 
-            return View();
+            return this.View();
         }
 
         /// <summary>
@@ -106,7 +106,7 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
             OpenIdConnectUtilities.CleanUpOnSignOutOrAuthFailure(this.HttpContext);
 
             var model = new FederatedSignOutApiModel() { LogOffUri = externalLogOffUri };
-            return View(model);
+            return this.View(model);
         }
 
         public static void RemoveCookie(HttpContextBase context, string cookieName)
@@ -114,7 +114,7 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
             context.Request.Cookies.Remove(cookieName);
             HttpCookie expiredCookie = new HttpCookie(cookieName)
             {
-                Expires = DateTime.UtcNow.AddDays(-1),
+                Expires = DateTime.UtcNow.AddDays(-1), 
                 Value = null
             };
 
@@ -127,13 +127,13 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
         {
             if (Context.User.IsAuthenticated)
             {
-                var ctx = Request.GetOwinContext();
+                var ctx = this.Request.GetOwinContext();
                 var cookies = ctx.Response.Cookies;
 
                 ctx.Authentication.SignOut(OpenIdConnectUtilities.ApplicationCookieAuthenticationType);
 
                 // Clean up openId nonce cookie. This is just a workaround. Ideally, we should be calling 'ctx.Authentication.SignOut(providerClient.Name)'              
-                foreach (string cookieName in ControllerContext.HttpContext.Request.Cookies.AllKeys)
+                foreach (string cookieName in this.ControllerContext.HttpContext.Request.Cookies.AllKeys)
                 {
                     if (cookieName.StartsWith("OpenIdConnect.nonce.", StringComparison.OrdinalIgnoreCase))
                     {
@@ -143,7 +143,7 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
             }
 
             this.AccountManager.Logout();
-            return Redirect("/federatedSignout");
+            return this.Redirect("/federatedSignout");
         }
 
         /// <summary>
@@ -162,10 +162,10 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
         {
             if (Context.User.IsAuthenticated)
             {
-                return Redirect("/accountmanagement");
+                return this.Redirect("/accountmanagement");
             }
 
-            ViewBag.ReturnUrl = returnUrl;
+            this.ViewBag.ReturnUrl = returnUrl;
 
             var model = new LoginApiModel();
             model.IsActivationFlow = !string.IsNullOrEmpty(existingAccount);
@@ -173,10 +173,10 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
             if (model.IsActivationFlow)
             {
                 string message = string.Format(
-                    CultureInfo.CurrentCulture,
-                    "Congratulations! We were able to successfully link your '{0}' account with the {1} account belonging to '{2}'. Please sign in to access your account.",
-                    Context.Site.Name,
-                    externalIdProvider,
+                    CultureInfo.CurrentCulture, 
+                    "Congratulations! We were able to successfully link your '{0}' account with the {1} account belonging to '{2}'. Please sign in to access your account.", 
+                    Context.Site.Name, 
+                    externalIdProvider, 
                     existingAccount);
                 model.Message = message;
             }
@@ -185,12 +185,12 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
             IDictionary<string, IdentityProviderClientConfigurationElement> identityProviderDictionary = GetIdentityProvidersFromConfig();
             foreach (IdentityProviderClientConfigurationElement provider in identityProviderDictionary.Values)
             {
-                MediaItem providerImage = Sitecore.Context.Database.GetItem(provider.ImageUrl.OriginalString);
+                MediaItem providerImage = Context.Database.GetItem(provider.ImageUrl.OriginalString);
                 providers.Add(new IdentityProviderApiModel() { Name = provider.Name, Image = providerImage });
             }
 
             model.Providers.AddRange(providers);
-            return View(model);
+            return this.View(model);
         }
 
         /// <summary>
@@ -209,20 +209,36 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
             switch (providerConfig.ProviderType)
             {
                 case IdentityProviderType.OpenIdConnect:
-                    ControllerContext.HttpContext.GetOwinContext().Authentication.Challenge(providerConfig.Name);
+                    this.ControllerContext.HttpContext.GetOwinContext().Authentication.Challenge(providerConfig.Name);
                     return new HttpUnauthorizedResult();
 
                 case IdentityProviderType.ACS:
-                    // Storing cookie with current provider (used in Logoff).
-                    OpenIdConnectUtilities.SetCookie(this.HttpContext, OpenIdConnectUtilities.CookieCurrentProvider, providerConfig.Name);
-                    OpenIdConnectUtilities.SetCookie(this.HttpContext, OpenIdConnectUtilities.CookieCurrentProviderType, providerConfig.ProviderType.ToString());
 
-                    string url = string.Format(CultureInfo.InvariantCulture, "{0}v2/wsfederation?wa=wsignin1.0&wtrealm={1}", providerConfig.Issuer, providerConfig.RedirectUrl);
-                    Response.Redirect(url, true);
+                    // Storing cookie with current provider (used in Logoff).
+                    OpenIdConnectUtilities.SetCookie(
+                        this.HttpContext, 
+                        OpenIdConnectUtilities.CookieCurrentProvider, 
+                        providerConfig.Name);
+                    OpenIdConnectUtilities.SetCookie(
+                        this.HttpContext, 
+                        OpenIdConnectUtilities.CookieCurrentProviderType, 
+                        providerConfig.ProviderType.ToString());
+
+                    string url = string.Format(
+                        CultureInfo.InvariantCulture, 
+                        "{0}v2/wsfederation?wa=wsignin1.0&wtrealm={1}", 
+                        providerConfig.Issuer, 
+                        providerConfig.RedirectUrl);
+                    this.Response.Redirect(url, true);
                     break;
 
                 default:
-                    SecurityException securityException = new SecurityException(string.Format(CultureInfo.InvariantCulture, "The identity provider type {0} is not supported", providerConfig.ProviderType));
+                    SecurityException securityException =
+                        new SecurityException(
+                            string.Format(
+                                CultureInfo.InvariantCulture, 
+                                "The identity provider type {0} is not supported", 
+                                providerConfig.ProviderType));
                     throw securityException;
             }
 
@@ -243,9 +259,9 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
             if (errorCode != null)
             {
                 string message = string.Format(
-                    CultureInfo.CurrentCulture,
-                    "The provider {0} returned error code {1} while processing user's credentials.",
-                    currentProvider.Name,
+                    CultureInfo.CurrentCulture, 
+                    "The provider {0} returned error code {1} while processing user's credentials.", 
+                    currentProvider.Name, 
                     errorCode);
                 this.Response.Redirect("~", false);
                 this.HttpContext.ApplicationInstance.CompleteRequest();
@@ -262,11 +278,11 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
             }
 
             string bodyParameters = string.Format(
-                CultureInfo.InvariantCulture,
-                "grant_type=authorization_code&code={0}&redirect_uri={1}&client_id={2}&client_secret={3}",
-                authorizationCode,
-                currentProvider.RedirectUrl,
-                currentProvider.ClientId,
+                CultureInfo.InvariantCulture, 
+                "grant_type=authorization_code&code={0}&redirect_uri={1}&client_id={2}&client_secret={3}", 
+                authorizationCode, 
+                currentProvider.RedirectUrl, 
+                currentProvider.ClientId, 
                 currentProvider.ClientSecret);
 
             OpenIdConnectConfiguration providerDiscoveryDocument = OpenIdConnectUtilities.GetDiscoveryDocument(currentProvider.Issuer);
@@ -324,7 +340,7 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
         {
             OpenIdConnectUtilities.SetTokenCookie(authToken);
 
-            var customerResult = AccountManager.GetCustomer().ServiceProviderResult;
+            var customerResult = this.AccountManager.GetCustomer().ServiceProviderResult;
             CommerceCustomer customer = customerResult.CommerceCustomer;
             if (customerResult.Success && customer != null)
             {
@@ -339,7 +355,7 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
             else
             {
                 string url = string.Format(CultureInfo.InvariantCulture, "/Register?isActivationPending={0}&email={1}", customerResult.Properties["IsRequestToLinkToExistingCustomerPending"], email);
-                return Redirect(url);
+                return this.Redirect(url);
             }
         }
 
@@ -371,41 +387,41 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
                     if (!response.ServiceProviderResult.Success || response.Result == null)
                     {
                         result.SetErrors(response.ServiceProviderResult);
-                        return Json(result, JsonRequestBehavior.AllowGet);
+                        return this.Json(result, JsonRequestBehavior.AllowGet);
                     }
                 }
 
                 var isLoggedIn = this.AccountManager.Login(commerceUser.Name, false);
                 if (isLoggedIn)
                 {
-                    return Redirect("/");
+                    return this.Redirect("/");
                 }
                 else
                 {
                     result.SetErrors(new List<string> { "Could not create user" });
                 }
 
-                return Json(result);
+                return this.Json(result);
             }
             catch (Sitecore.Commerce.OpenIDConnectionClosedUnexpectedlyException)
             {
                 this.CleanNotAuthorizedSession();
-                return Redirect("/login");
+                return this.Redirect("/login");
             }
             catch (Exception e)
             {
-                return Json(new ErrorApiModel("Register", e), JsonRequestBehavior.AllowGet);
+                return this.Json(new ErrorApiModel("Register", e), JsonRequestBehavior.AllowGet);
             }
         }
 
         public virtual void CleanNotAuthorizedSession()
         {
-            var ctx = Request.GetOwinContext();
+            var ctx = this.Request.GetOwinContext();
             ctx.Authentication.SignOut(OpenIdConnectUtilities.ApplicationCookieAuthenticationType);
             OpenIdConnectUtilities.RemoveCookie(OpenIdConnectUtilities.OpenIdCookie);
 
             // Clean up openId nonce cookie. This is just a workaround. Ideally, we should be calling 'ctx.Authentication.SignOut(providerClient.Name)'              
-            foreach (string cookieName in ControllerContext.HttpContext.Request.Cookies.AllKeys)
+            foreach (string cookieName in this.ControllerContext.HttpContext.Request.Cookies.AllKeys)
             {
                 if (cookieName.StartsWith("OpenIdConnect.nonce.", StringComparison.OrdinalIgnoreCase))
                 {
@@ -434,10 +450,10 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
         {
             if (!Context.User.IsAuthenticated)
             {
-                return Redirect("/login");
+                return this.Redirect("/login");
             }
 
-            return View();
+            return this.View();
         }
 
         [HttpGet]
@@ -448,13 +464,13 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
 
             if (!Context.User.IsAuthenticated)
             {
-                return Redirect("/login");
+                return this.Redirect("/login");
             }
 
-            var user = CommerceUserContext.Current;
+            var user = this.CommerceUserContext.Current;
             if (user == null)
             {
-                return View(model);
+                return this.View(model);
             }
 
             model.FirstName = user.FirstName;
@@ -463,7 +479,7 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
             model.LastName = user.LastName;
             model.TelephoneNumber = user.Phone as string;
 
-            return View(model);
+            return this.View(model);
         }
 
         [HttpGet]
@@ -471,7 +487,7 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
         [OutputCache(NoStore = true, Location = OutputCacheLocation.None)]
         public ActionResult ForgotPassword()
         {
-            return View();
+            return this.View();
         }
 
         [HttpGet]
@@ -479,9 +495,9 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
         [OutputCache(NoStore = true, Location = OutputCacheLocation.None)]
         public ActionResult ForgotPasswordConfirmation(string userName)
         {
-            ViewBag.UserName = userName;
+            this.ViewBag.UserName = userName;
 
-            return View();
+            return this.View();
         }
 
         [HttpGet]
@@ -490,10 +506,10 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
         {
             if (!Context.User.IsAuthenticated)
             {
-                return Redirect("/login");
+                return this.Redirect("/login");
             }
 
-            return View();
+            return this.View();
         }
 
         [HttpPost]
@@ -527,7 +543,7 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
                         result.SetErrors(response.ServiceProviderResult);
                     }
 
-                    return Json(result, JsonRequestBehavior.AllowGet);
+                    return this.Json(result, JsonRequestBehavior.AllowGet);
                 }
                 else
                 {
@@ -543,13 +559,13 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
 
                         result.UserName = response.Result.Name;
                         result.IsSignupFlow = true;
-                        return Json(result, JsonRequestBehavior.AllowGet);
+                        return this.Json(result, JsonRequestBehavior.AllowGet);
                     }
                     else
                     {
                         result.Success = false;
                         result.SetErrors(response.ServiceProviderResult);
-                        return Json(result, JsonRequestBehavior.AllowGet);
+                        return this.Json(result, JsonRequestBehavior.AllowGet);
                     }
                 }
             }
@@ -557,18 +573,18 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
             {
                 result.Success = false;
                 result.SetErrors(StorefrontConstants.KnownActionNames.RegisterActionName, ex.InnerExceptions[0]);
-                return Json(result, JsonRequestBehavior.AllowGet);
+                return this.Json(result, JsonRequestBehavior.AllowGet);
             }
             catch (Sitecore.Commerce.OpenIDConnectionClosedUnexpectedlyException)
             {
                 this.CleanNotAuthorizedSession();
-                return Redirect("/login");
+                return this.Redirect("/login");
             }
             catch (Exception ex)
             {
                 result.Success = false;
                 result.SetErrors(StorefrontConstants.KnownActionNames.RegisterActionName, ex);
-                return Json(result, JsonRequestBehavior.AllowGet);
+                return this.Json(result, JsonRequestBehavior.AllowGet);
             }
         }
 
@@ -594,7 +610,7 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
                 registerViewModel.Errors.Add("A previous request to link this user to an exiting account is already pending. Any new actions will override the previous request.");
             }
 
-            return View(registerViewModel);
+            return this.View(registerViewModel);
         }
 
         [HttpPost]
@@ -610,21 +626,21 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
                 var result = this.CreateJsonResult<ChangePasswordApiModel>();
                 if (result.HasErrors)
                 {
-                    return Json(result, JsonRequestBehavior.AllowGet);
+                    return this.Json(result, JsonRequestBehavior.AllowGet);
                 }
 
-                var response = AccountManager.UpdateUserPassword(CommerceUserContext.Current.UserName, inputModel);
+                var response = this.AccountManager.UpdateUserPassword(this.CommerceUserContext.Current.UserName, inputModel);
                 result = new ChangePasswordApiModel(response.ServiceProviderResult);
                 if (response.ServiceProviderResult.Success)
                 {
-                    result.Initialize(CommerceUserContext.Current.UserName);
+                    result.Initialize(this.CommerceUserContext.Current.UserName);
                 }
 
-                return Json(result);
+                return this.Json(result);
             }
             catch (Exception e)
             {
-                return Json(new ErrorApiModel("ChangePassword", e), JsonRequestBehavior.AllowGet);
+                return this.Json(new ErrorApiModel("ChangePassword", e), JsonRequestBehavior.AllowGet);
             }
         }
 
@@ -635,11 +651,11 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
         {
             if (!Context.User.IsAuthenticated)
             {
-                return Redirect("/login");
+                return this.Redirect("/login");
             }
 
             var model = new ProfileModel();
-            var user = CommerceUserContext.Current;
+            var user = this.CommerceUserContext.Current;
             if (user != null)
             {
                 model.FirstName = user.FirstName;
@@ -652,17 +668,17 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
 
             if (item != null)
             {
-                //If there is a specially EditProfile then use it
-                ViewBag.EditProfileLink = LinkManager.GetDynamicUrl(item);
+                // If there is a specially EditProfile then use it
+                this.ViewBag.EditProfileLink = LinkManager.GetDynamicUrl(item);
             }
             else
             {
-                //Else go global Edit Profile
+                // Else go global Edit Profile
                 item = Context.Item.Database.GetItem("/sitecore/content/Home/MyAccount/Profile");
-                ViewBag.EditProfileLink = LinkManager.GetDynamicUrl(item);
+                this.ViewBag.EditProfileLink = LinkManager.GetDynamicUrl(item);
             }
 
-            return View(model);
+            return this.View(model);
         }
 
         [HttpPost]
@@ -679,16 +695,16 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
                 var addresses = this.AllAddresses(result);
                 var countries = this.GetAvailableCountries(result);
                 result.Initialize(addresses, countries);
-                return Json(result, JsonRequestBehavior.AllowGet);
+                return this.Json(result, JsonRequestBehavior.AllowGet);
             }
             catch (Sitecore.Commerce.OpenIDConnectionClosedUnexpectedlyException)
             {
                 this.CleanNotAuthorizedSession();
-                return Json(result, JsonRequestBehavior.AllowGet);
+                return this.Json(result, JsonRequestBehavior.AllowGet);
             }
             catch (Exception e)
             {
-                return Json(new ErrorApiModel("AddressList", e), JsonRequestBehavior.AllowGet);
+                return this.Json(new ErrorApiModel("AddressList", e), JsonRequestBehavior.AllowGet);
             }
         }
 
@@ -706,23 +722,23 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
                 var validationResult = this.CreateJsonResult();
                 if (validationResult.HasErrors)
                 {
-                    return Json(validationResult, JsonRequestBehavior.AllowGet);
+                    return this.Json(validationResult, JsonRequestBehavior.AllowGet);
                 }
 
                 var addresses = new List<IParty>();
-                var response = AccountManager.RemovePartiesFromUser(Context.User.Name, model.ExternalId);
+                var response = this.AccountManager.RemovePartiesFromUser(Context.User.Name, model.ExternalId);
                 var result = new AddressListItemApiModel(response.ServiceProviderResult);
                 if (response.ServiceProviderResult.Success)
                 {
-                    addresses = AllAddresses(result);
+                    addresses = this.AllAddresses(result);
                 }
 
                 result.Initialize(addresses, null);
-                return Json(result, JsonRequestBehavior.AllowGet);
+                return this.Json(result, JsonRequestBehavior.AllowGet);
             }
             catch (Exception e)
             {
-                return Json(new ErrorApiModel("AddressDelete", e), JsonRequestBehavior.AllowGet);
+                return this.Json(new ErrorApiModel("AddressDelete", e), JsonRequestBehavior.AllowGet);
             }
         }
 
@@ -740,25 +756,25 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
                 var validationResult = this.CreateJsonResult();
                 if (validationResult.HasErrors)
                 {
-                    return Json(validationResult, JsonRequestBehavior.AllowGet);
+                    return this.Json(validationResult, JsonRequestBehavior.AllowGet);
                 }
 
                 var addresses = new List<IParty>();
-                var user = CommerceUserContext.Current;
+                var user = this.CommerceUserContext.Current;
                 var result = new AddressListItemApiModel();
                 
                 var customer = new CommerceCustomer { ExternalId = user.UserId };
                 var party = new Party
                 {
-                    ExternalId = model.ExternalId,
-                    FirstName = model.Name,
-                    LastName = string.Empty,
-                    Address1 = model.Address1,
-                    City = model.City,
-                    Country = model.Country,
-                    State = model.State,
-                    ZipPostalCode = model.ZipPostalCode,
-                    PartyId = model.PartyId,
+                    ExternalId = model.ExternalId, 
+                    FirstName = model.Name, 
+                    LastName = string.Empty, 
+                    Address1 = model.Address1, 
+                    City = model.City, 
+                    Country = model.Country, 
+                    State = model.State, 
+                    ZipPostalCode = model.ZipPostalCode, 
+                    PartyId = model.PartyId, 
                     IsPrimary = model.IsPrimary
                 };
 
@@ -766,7 +782,7 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
                 {
                     // Verify we have not reached the maximum number of addresses supported.
                     int numberOfAddresses = this.AllAddresses(result).Count;
-                    if (numberOfAddresses >= MaxNumberOfAddresses)
+                    if (numberOfAddresses >= this.MaxNumberOfAddresses)
                     {
                         var message = "Address limit reached";
                         result.Errors.Add(string.Format(CultureInfo.InvariantCulture, message, numberOfAddresses));
@@ -774,7 +790,7 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
                     }
                     else
                     {
-                        var response = AccountManager.AddParties(user.UserName, new List<IParty> { model });
+                        var response = this.AccountManager.AddParties(user.UserName, new List<IParty> { model });
                         result.SetErrors(response.ServiceProviderResult);
                         if (response.ServiceProviderResult.Success)
                         {
@@ -786,7 +802,7 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
                 }
                 else
                 {
-                    var response = AccountManager.UpdateParties(user.UserName, new List<IParty> { model });
+                    var response = this.AccountManager.UpdateParties(user.UserName, new List<IParty> { model });
                     result.SetErrors(response.ServiceProviderResult);
                     if (response.ServiceProviderResult.Success)
                     {
@@ -796,16 +812,16 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
                     result.Initialize(addresses, null);
                 }
 
-                return Json(result, JsonRequestBehavior.AllowGet);
+                return this.Json(result, JsonRequestBehavior.AllowGet);
             }
-            catch (Sitecore.Commerce.OpenIDConnectionClosedUnexpectedlyException e)
+            catch (OpenIDConnectionClosedUnexpectedlyException e)
             {
                 this.CleanNotAuthorizedSession();
-                return Json(new ErrorApiModel("Login", e), JsonRequestBehavior.AllowGet);
+                return this.Json(new ErrorApiModel("Login", e), JsonRequestBehavior.AllowGet);
             }
             catch (Exception e)
             {
-                return Json(new ErrorApiModel("AddressModify", e), JsonRequestBehavior.AllowGet);
+                return this.Json(new ErrorApiModel("AddressModify", e), JsonRequestBehavior.AllowGet);
             }
         }
 
@@ -822,20 +838,20 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
                 var result = this.CreateJsonResult<ProfileApiModel>();
                 if (result.HasErrors)
                 {
-                    return Json(result, JsonRequestBehavior.AllowGet);
+                    return this.Json(result, JsonRequestBehavior.AllowGet);
                 }
 
-                if (CommerceUserContext.Current == null)
+                if (this.CommerceUserContext.Current == null)
                 {
-                    return Json(result);
+                    return this.Json(result);
                 }
 
-                var response = AccountManager.UpdateUser(CommerceUserContext.Current.UserName, model);
+                var response = this.AccountManager.UpdateUser(this.CommerceUserContext.Current.UserName, model);
                 result.SetErrors(response.ServiceProviderResult);
                 if (response.ServiceProviderResult.Success && !string.IsNullOrWhiteSpace(model.Password) && !string.IsNullOrWhiteSpace(model.PasswordRepeat))
                 {
                     var changePasswordModel = new ChangePasswordInputModel {NewPassword = model.Password, ConfirmPassword = model.PasswordRepeat};
-                    var passwordChangeResponse = AccountManager.UpdateUserPassword(CommerceUserContext.Current.UserName, changePasswordModel);
+                    var passwordChangeResponse = this.AccountManager.UpdateUserPassword(this.CommerceUserContext.Current.UserName, changePasswordModel);
                     result.SetErrors(passwordChangeResponse.ServiceProviderResult);
                     if (passwordChangeResponse.ServiceProviderResult.Success)
                     {
@@ -843,11 +859,11 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
                     }
                 }
 
-                return Json(result);
+                return this.Json(result);
             }
             catch (Exception e)
             {
-                return Json(new ErrorApiModel("UpdateProfile", e), JsonRequestBehavior.AllowGet);
+                return this.Json(new ErrorApiModel("UpdateProfile", e), JsonRequestBehavior.AllowGet);
             }
         }
 
@@ -860,20 +876,20 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
         {
             try
             {
-                if (CommerceUserContext.Current == null)
+                if (this.CommerceUserContext.Current == null)
                 {
                     var anonymousResult = new UserApiModel();
-                    return Json(anonymousResult, JsonRequestBehavior.AllowGet);
+                    return this.Json(anonymousResult, JsonRequestBehavior.AllowGet);
                 }
 
                 var result = new UserApiModel();
-                result.Initialize(CommerceUserContext.Current);
+                result.Initialize(this.CommerceUserContext.Current);
 
-                return Json(result, JsonRequestBehavior.AllowGet);
+                return this.Json(result, JsonRequestBehavior.AllowGet);
             }
             catch (Exception e)
             {
-                return Json(new ErrorApiModel("GetCurrentUser", e), JsonRequestBehavior.AllowGet);
+                return this.Json(new ErrorApiModel("GetCurrentUser", e), JsonRequestBehavior.AllowGet);
             }
         }
 
@@ -890,45 +906,45 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
                 var result = this.CreateJsonResult<ForgotPasswordApiModel>();
                 if (result.HasErrors)
                 {
-                    return Json(result, JsonRequestBehavior.AllowGet);
+                    return this.Json(result, JsonRequestBehavior.AllowGet);
                 }
 
-                var resetResponse = AccountManager.ResetUserPassword(model);
+                var resetResponse = this.AccountManager.ResetUserPassword(model);
                 if (!resetResponse.ServiceProviderResult.Success)
                 {
-                    return Json(new ForgotPasswordApiModel(resetResponse.ServiceProviderResult));
+                    return this.Json(new ForgotPasswordApiModel(resetResponse.ServiceProviderResult));
                 }
 
                 result.Initialize(model.Email);
-                return Json(result, JsonRequestBehavior.AllowGet);
+                return this.Json(result, JsonRequestBehavior.AllowGet);
             }
             catch (Exception e)
             {
-                return Json(new ErrorApiModel("ForgotPassword", e), JsonRequestBehavior.AllowGet);
+                return this.Json(new ErrorApiModel("ForgotPassword", e), JsonRequestBehavior.AllowGet);
             }
         }
 
         public string UpdateUserName(string userName)
         {
 
-            var defaultDomain = AccountManager.GetCommerceUsersDomain();
+            var defaultDomain = this.AccountManager.GetCommerceUsersDomain();
             return !userName.StartsWith(defaultDomain, StringComparison.OrdinalIgnoreCase) ? string.Concat(defaultDomain, @"\", userName) : userName;
         }
 
         private ActionResult RedirectToLocal(string returnUrl)
         {
-            if (Url.IsLocalUrl(returnUrl))
+            if (this.Url.IsLocalUrl(returnUrl))
             {
-                return Redirect(returnUrl);
+                return this.Redirect(returnUrl);
             }
 
-            return Redirect("/");
+            return this.Redirect("/");
         }
 
         private Dictionary<string, string> GetAvailableCountries(AddressListItemApiModel result)
         {
             var countries = new Dictionary<string, string>();
-            var response = CountryManager.GetAvailableCountries();
+            var response = this.CountryManager.GetAvailableCountries();
             if (response.ServiceProviderResult.Success && response.Result != null)
             {
                 countries = response.Result;
@@ -941,7 +957,7 @@ namespace Sitecore.Feature.Commerce.Customers.Controllers
         private List<IParty> AllAddresses(AddressListItemApiModel result)
         {
             var addresses = new List<IParty>();
-            var response = AccountManager.GetCustomerParties(CommerceUserContext.Current.UserName);
+            var response = this.AccountManager.GetCustomerParties(this.CommerceUserContext.Current.UserName);
             if (response.ServiceProviderResult.Success && response.Result != null)
             {
                 addresses = response.Result.ToList();

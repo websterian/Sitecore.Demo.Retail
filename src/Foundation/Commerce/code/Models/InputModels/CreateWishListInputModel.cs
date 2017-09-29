@@ -1,5 +1,5 @@
 ﻿//-----------------------------------------------------------------------
-// <copyright file="OrderConfirmationModel.cs" company="Sitecore Corporation">
+// <copyright file="CreateWishListInputModel.cs" company="Sitecore Corporation">
 //     Copyright (c) Sitecore Corporation 1999-2016
 // </copyright>
 //-----------------------------------------------------------------------
@@ -14,22 +14,22 @@
 // and limitations under the License.
 // -------------------------------------------------------------------------------------------
 
-using Sitecore.Mvc.Presentation;
-
-namespace Sitecore.Feature.Commerce.Orders.Models
+namespace Sitecore.Foundation.Commerce.Models.InputModels
 {
-    public class OrderConfirmationViewModel : RenderingModel
+    using System.ComponentModel.DataAnnotations;
+
+    /// <summary>
+    /// Defines the WishListInputModel class.
+    /// </summary>
+    public class CreateWishListInputModel
     {
-        public string ConfirmationId { get; set; }
-
-        public string OrderStatus { get; set; }
-
-        public void Initialize(Rendering renderings, string confirmationId, string orderStatus)
-        {
-            base.Initialize(renderings);
-
-            ConfirmationId = confirmationId;
-            OrderStatus = orderStatus;
-        }
+        /// <summary>
+        /// Gets or sets the name.
+        /// </summary>
+        /// <value>
+        /// The name.
+        /// </value>
+        [Required] 
+        public string Name { get; set; }
     }
 }

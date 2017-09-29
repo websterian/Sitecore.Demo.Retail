@@ -67,6 +67,9 @@
     <Reference Include="Sitecore.Commerce">
       <HintPath>..\..\..\..\lib\Sitecore\Sitecore.Commerce.dll</HintPath>
     </Reference>
+    <Reference Include="Sitecore.Commerce.Connect.CommerceServer">
+      <HintPath>..\..\..\..\lib\Sitecore\Sitecore.Commerce.Connect.CommerceServer.dll</HintPath>
+    </Reference>
     <Reference Include="Sitecore.Commerce.Connect.DynamicsRetail, Version=8.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\..\lib\Sitecore\Sitecore.Commerce.Connect.DynamicsRetail.dll</HintPath>
@@ -147,7 +150,11 @@
     <Content Include="Scripts\Customers\addressListViewModel.js" />
     <Content Include="Scripts\Customers\addressViewModel.js" />
     <Content Include="Scripts\Customers\countryRegionViewModel.js" />
+    <Content Include="Scripts\Customers\loyaltycards.js" />
+    <Content Include="Scripts\Customers\loyaltycardsViewModel.js" />
     <Content Include="Scripts\Customers\register.js" />
+    <Content Include="Scripts\Customers\wishlist.js" />
+    <Content Include="Scripts\Customers\wishlistViewModel.js" />
     <Content Include="Views\Customers\AddressBook.cshtml" />
     <Content Include="Views\Customers\Addresses.cshtml" />
     <Content Include="Views\Customers\ChangePassword.cshtml" />
@@ -159,11 +166,19 @@
     <Content Include="Views\Customers\Register.cshtml" />
     <Content Include="Views\Customers\Login.cshtml" />
     <Content Include="Views\Customers\FederatedSignout.cshtml" />
+    <Content Include="Views\Customers\LoyaltyCards.cshtml" />
+    <Content Include="Views\Customers\MyWishList.cshtml" />
+    <Content Include="Views\Customers\MyWishLists.cshtml" />
+    <Content Include="Views\Customers\_LoyaltyAccount.cshtml" />
+    <Content Include="Views\Customers\_WishLists.cshtml" />
+    <Content Include="Views\Customers\LoyaltyAccount.cshtml" />
     <None Include="Web.config" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="App_Start\RouteConfig.cs" />
     <Compile Include="Controllers\CustomersController.cs" />
+    <Compile Include="Controllers\LoyaltyController.cs" />
+    <Compile Include="Controllers\WishListController.cs" />
     <Compile Include="Infrastructure\Pipelines\InitializeRoutes.cs" />
     <Compile Include="Models\AddressItemBaseApiModel.cs" />
     <Compile Include="Models\AddressItemApiModel.cs" />
@@ -174,11 +189,22 @@
     <Compile Include="Models\ForgotPasswordApiModel.cs" />
     <Compile Include="Models\IdentityProviderApiModel.cs" />
     <Compile Include="Models\LoginApiModel.cs" />
+    <Compile Include="Models\LoyaltyCardItemBaseApiModel.cs" />
+    <Compile Include="Models\LoyaltyCardsBaseApiModel.cs" />
+    <Compile Include="Models\LoyaltyProgramItemBaseApiModel.cs" />
+    <Compile Include="Models\LoyaltyRewardPointItemBaseApiModel.cs" />
+    <Compile Include="Models\LoyaltyTierItemBaseApiModel.cs" />
+    <Compile Include="Models\LoyaltyTransactionItemBaseApiModel.cs" />
     <Compile Include="Models\ProfileApiModel.cs" />
     <Compile Include="Models\RegisterApiModel.cs" />
     <Compile Include="Models\RegisterBaseResultApiModel.cs" />
+    <Compile Include="Models\UpdateLoyaltyCardBaseApiModel.cs" />
     <Compile Include="Models\UserApiModel.cs" />
     <Compile Include="Models\RegisterViewModel.cs" />
+    <Compile Include="Models\WishListBaseApiModel.cs" />
+    <Compile Include="Models\WishListHeaderItemBaseApiModel.cs" />
+    <Compile Include="Models\WishListItemBaseApiModel.cs" />
+    <Compile Include="Models\WishListsBaseApiModel.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

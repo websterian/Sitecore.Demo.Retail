@@ -28,6 +28,7 @@ namespace Sitecore.Foundation.Commerce.Infrastructure
             serviceCollection.AddTypesImplementing<object>(Lifetime.Transient, "Sitecore.Commerce");
             serviceCollection.Add(new ServiceDescriptor(typeof(ICommerceSearchManager), provider => CommerceTypeLoader.CreateInstance<ICommerceSearchManager>(), ServiceLifetime.Singleton));
             serviceCollection.Add(new ServiceDescriptor(typeof(ICatalogRepository), provider => CommerceTypeLoader.CreateInstance<ICatalogRepository>(), ServiceLifetime.Singleton));
+            serviceCollection.AddTypesImplementing<object>(Lifetime.Transient, "Sitecore.Commerce.Connect.DynamicsRetail");
         }
     }
 }

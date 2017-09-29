@@ -15,13 +15,9 @@
 // and limitations under the License.
 // -------------------------------------------------------------------------------------------
 
-using Sitecore.Commerce.Connect.CommerceServer.Orders.Models;
-using Sitecore.Commerce.Entities;
 using Sitecore.Commerce.Services;
 using Sitecore.Diagnostics;
 using Sitecore.Foundation.Commerce.Models;
-using System;
-using Party = Sitecore.Commerce.Entities.Party;
 
 namespace Sitecore.Feature.Commerce.Orders.Models
 {

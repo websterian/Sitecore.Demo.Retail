@@ -1,14 +1,9 @@
 using Sitecore.Commerce.Connect.CommerceServer.Orders.Models;
-using Sitecore.Commerce.Entities.Carts;
 using Sitecore.Commerce.Entities.Shipping;
-using Sitecore.Data;
-using Sitecore.Data.Fields;
-using Sitecore.Data.Items;
-using Sitecore.Links;
-using System;
+
 using System.Collections.Generic;
 using System.Linq;
-using System.Web;
+
 using Sitecore.Foundation.Commerce.Models;
 
 namespace Sitecore.Feature.Commerce.Orders.Models

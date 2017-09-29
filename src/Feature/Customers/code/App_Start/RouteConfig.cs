@@ -33,6 +33,18 @@ namespace Sitecore.Feature.Commerce.Customers
             new ApiControllerMapping("account-addressmodify", "Customers", "AddressModify"),
             new ApiControllerMapping("account-updateprofile", "Customers", "UpdateProfile"),
             new ApiControllerMapping("account-changepassword", "Customers", "ChangePassword"),
+            new ApiControllerMapping("loyalty-activateaccount", "Loyalty", "ActivateAccount"),
+            new ApiControllerMapping("loyalty-activeloyaltycards", "Loyalty", "ActiveLoyaltyCards"),
+            new ApiControllerMapping("loyalty-getloyaltycards", "Loyalty", "GetLoyaltyCards"),
+            new ApiControllerMapping("wishlist-addwishliststocart", "WishList", "AddWishListsToCart"),
+            new ApiControllerMapping("wishlist-activewishlists", "WishList", "ActiveWishLists"),
+            new ApiControllerMapping("wishlist-addtowishlist", "WishList", "AddToWishList"),
+            new ApiControllerMapping("wishlist-createwishlist", "WishList", "CreateWishList"),
+            new ApiControllerMapping("wishlist-deletelineitem", "WishList", "DeleteLineItem"),
+            new ApiControllerMapping("wishlist-deletewishlist", "WishList", "DeleteWishList"),
+            new ApiControllerMapping("wishlist-getwishlist", "WishList", "GetWishList"),
+            new ApiControllerMapping("wishlist-updatelineitem", "WishList", "UpdateLineItem"),
+            new ApiControllerMapping("wishlist-updatewishlist", "WishList", "UpdateWishList"),
         };
 
         public static void RegisterRoutes(RouteCollection routes)

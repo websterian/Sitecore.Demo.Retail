@@ -16,7 +16,6 @@
 // -------------------------------------------------------------------------------------------
 
 using Sitecore.Commerce.Connect.CommerceServer.Orders.Models;
-using Sitecore.Mvc.Presentation;
 
 namespace Sitecore.Feature.Commerce.Orders.Models
 {

@@ -17,10 +17,8 @@
 
 using System.Collections.Generic;
 using System.Linq;
-using Sitecore.Commerce.Connect.CommerceServer.Orders.Models;
-using Sitecore.Commerce.Entities;
+
 using Sitecore.Commerce.Services;
-using System;
 using Sitecore.Foundation.Commerce.Models;
 
 namespace Sitecore.Feature.Commerce.Orders.Models
