@@ -15,26 +15,29 @@
 // and limitations under the License.
 // -------------------------------------------------------------------------------------------
 
-namespace Sitecore.Reference.Storefront.Managers
+namespace Sitecore.Foundation.Commerce.Managers
 {
     using System;
     using System.Collections.Generic;
+    using System.Globalization;
     using System.Linq;
+
     using Sitecore.Commerce.Connect.CommerceServer.Inventory.Models;
     using Sitecore.Commerce.Connect.CommerceServer.Orders.Models;
     using Sitecore.Commerce.Entities.Inventory;
+    using Sitecore.Commerce.Entities.Prices;
     using Sitecore.Commerce.Entities.WishLists;
+    using Sitecore.Commerce.Services;
     using Sitecore.Commerce.Services.WishLists;
     using Sitecore.Diagnostics;
-    using Sitecore.Reference.Storefront.Models.InputModels;
-    using Sitecore.Reference.Storefront.Models.SitecoreItemModels;
-    using System.Globalization;
-    using Sitecore.Commerce.Entities.Prices;
+    using Sitecore.Foundation.Commerce.Extensions;
+    using Sitecore.Foundation.Commerce.Models;
+    using Sitecore.Foundation.Commerce.Models.InputModels;
 
     /// <summary>
     /// Defines the WishListManager class.
     /// </summary>
-    public class WishListManager : BaseManager
+    public class WishListManager : IManager
     {
         #region Constructors
 
@@ -101,40 +104,44 @@ namespace Sitecore.Reference.Storefront.Managers
         /// <summary>
         /// Creates the wish list.
         /// </summary>
-        /// <param name="storefront">The storefront.</param>
-        /// <param name="visitorContext">The visitor context.</param>
-        /// <param name="wishListName">Name of the wish list.</param>
-        /// <returns>The manager response with the wish list as the result.</returns>
-        public virtual ManagerResponse<CreateWishListResult, WishList> CreateWishList([NotNull] CommerceStorefront storefront, [NotNull] VisitorContext visitorContext, [NotNull] string wishListName)
+        /// <param name="storefront">
+        /// The storefront.
+        /// </param>
+        /// <param name="userId">
+        /// The user Id.
+        /// </param>
+        /// <param name="wishListName">
+        /// Name of the wish list.
+        /// </param>
+        /// <returns>
+        /// The manager response with the wish list as the result.
+        /// </returns>
+        public virtual ManagerResponse<CreateWishListResult, WishList> CreateWishList([NotNull] CommerceStorefront storefront, string userId, [NotNull] string wishListName)
         {
             Assert.ArgumentNotNull(storefront, "storefront");
-            Assert.ArgumentNotNull(visitorContext, "visitorContext");
             Assert.ArgumentNotNullOrEmpty(wishListName, "wishListName");
 
             CreateWishListResult errorResult = new CreateWishListResult() { Success = false };
 
             // Limit the number of wish list that can get created.
-            var wishListResponse = this.GetWishLists(storefront, visitorContext);
+            var wishListResponse = this.GetWishLists(storefront, userId);
             if (!wishListResponse.ServiceProviderResult.Success)
             {
                 wishListResponse.ServiceProviderResult.SystemMessages.ToList().ForEach(m => errorResult.SystemMessages.Add(m));
                 return new ManagerResponse<CreateWishListResult, WishList>(errorResult, null);
             }
-
-            if (wishListResponse.Result.Count() >= StorefrontManager.CurrentStorefront.MaxNumberOfWishLists)
+            //TODO : Add to Sitecore setup item
+            if (wishListResponse.Result.Count() >= 10)
             {
-                var message = StorefrontManager.GetSystemMessage(StorefrontConstants.SystemMessages.MaxWishListLimitReached);
-                message = string.Format(CultureInfo.InvariantCulture, message, StorefrontManager.CurrentStorefront.MaxNumberOfWishLists);
-                errorResult.SystemMessages.Add(new Commerce.Services.SystemMessage() { Message = message });
+                var message = "You have reached the max number of wish lists {0}";
+                message = string.Format(CultureInfo.InvariantCulture, message, 10);
+                errorResult.SystemMessages.Add(new SystemMessage() { Message = message });
                 return new ManagerResponse<CreateWishListResult, WishList>(errorResult, null);
             }
 
-            var request = new CreateWishListRequest(visitorContext.UserId, wishListName, storefront.ShopName);
+            var request = new CreateWishListRequest(userId, wishListName, storefront.ShopName);
             var result = this.WishListServiceProvider.CreateWishList(request);
-            if (!result.Success)
-            {
-                Helpers.LogSystemMessages(result.SystemMessages, result);
-            }
+            result.WriteToSitecoreLog();
 
             return new ManagerResponse<CreateWishListResult, WishList>(result, result.WishList);
         }
@@ -146,23 +153,19 @@ namespace Sitecore.Reference.Storefront.Managers
         /// <param name="visitorContext">The visitor context.</param>
         /// <param name="wishListId">The wish list identifier.</param>
         /// <returns>The manager response with the wish list as the result.</returns>
-        public virtual ManagerResponse<GetWishListResult, WishList> GetWishList([NotNull] CommerceStorefront storefront, [NotNull] VisitorContext visitorContext, string wishListId)
+        public virtual ManagerResponse<GetWishListResult, WishList> GetWishList([NotNull] CommerceStorefront storefront, [NotNull] string userId, string wishListId)
         {
             Assert.ArgumentNotNull(storefront, "storefront");
-            Assert.ArgumentNotNull(visitorContext, "visitorContext");
             Assert.ArgumentNotNullOrEmpty(wishListId, "wishListId");
 
-            var request = new GetWishListRequest(visitorContext.UserId, wishListId, storefront.ShopName);
+            var request = new GetWishListRequest(userId, wishListId, storefront.ShopName);
             var result = this.WishListServiceProvider.GetWishList(request);
             if (result.Success && result.WishList != null)
             {
                 this.PopulateStockInformation(storefront, result.WishList);
-                this.PopulatePriceInformation(storefront, visitorContext, result.WishList);
+                this.PopulatePriceInformation(result.WishList);
             }
-            else if (!result.Success)
-            {
-                Helpers.LogSystemMessages(result.SystemMessages, result);
-            }
+             result.WriteToSitecoreLog();
 
             return new ManagerResponse<GetWishListResult, WishList>(result, result.WishList);
         }
@@ -170,20 +173,23 @@ namespace Sitecore.Reference.Storefront.Managers
         /// <summary>
         /// Gets the wish lists.
         /// </summary>
-        /// <param name="storefront">The storefront.</param>
-        /// <param name="visitorContext">The visitor context.</param>
-        /// <returns>The manager response with the wish list as the result.</returns>
-        public virtual ManagerResponse<GetWishListsResult, IEnumerable<WishListHeader>> GetWishLists([NotNull] CommerceStorefront storefront, [NotNull] VisitorContext visitorContext)
+        /// <param name="storefront">
+        /// The storefront.
+        /// </param>
+        /// <param name="userId">
+        /// The user Id.
+        /// </param>
+        /// <returns>
+        /// The manager response with the wish list as the result.
+        /// </returns>
+        public virtual ManagerResponse<GetWishListsResult, IEnumerable<WishListHeader>> GetWishLists([NotNull] CommerceStorefront storefront, [NotNull] string userId)
         {
             Assert.ArgumentNotNull(storefront, "storefront");
-            Assert.ArgumentNotNull(visitorContext, "visitorContext");
 
-            var request = new GetWishListsRequest(visitorContext.UserId, storefront.ShopName);
+            var request = new GetWishListsRequest(userId, storefront.ShopName);
             var result = this.WishListServiceProvider.GetWishLists(request);
-            if (!result.Success)
-            {
-                Helpers.LogSystemMessages(result.SystemMessages, result);
-            }
+
+            result.WriteToSitecoreLog();
 
             return new ManagerResponse<GetWishListsResult, IEnumerable<WishListHeader>>(result, result.WishLists.ToList());
         }
@@ -195,18 +201,14 @@ namespace Sitecore.Reference.Storefront.Managers
         /// <param name="visitorContext">The visitor context.</param>
         /// <param name="wishListId">The wish list identifier.</param>
         /// <returns>The manager response with the wish list as the result.</returns>
-        public virtual ManagerResponse<DeleteWishListResult, WishList> DeleteWishList([NotNull] CommerceStorefront storefront, [NotNull] VisitorContext visitorContext, string wishListId)
+        public virtual ManagerResponse<DeleteWishListResult, WishList> DeleteWishList([NotNull] CommerceStorefront storefront, [NotNull] string userId, string wishListId)
         {
             Assert.ArgumentNotNull(storefront, "storefront");
-            Assert.ArgumentNotNull(visitorContext, "visitorContext");
             Assert.ArgumentNotNullOrEmpty(wishListId, "wishListId");
 
-            var request = new DeleteWishListRequest(new WishList { UserId = visitorContext.UserId, CustomerId = visitorContext.UserId, ExternalId = wishListId, ShopName = storefront.ShopName });
+            var request = new DeleteWishListRequest(new WishList { UserId = userId, CustomerId = userId, ExternalId = wishListId, ShopName = storefront.ShopName });
             var result = this.WishListServiceProvider.DeleteWishList(request);
-            if (!result.Success)
-            {
-                Helpers.LogSystemMessages(result.SystemMessages, result);
-            }
+             result.WriteToSitecoreLog();
 
             return new ManagerResponse<DeleteWishListResult, WishList>(result, result.WishList);
         }
@@ -214,25 +216,32 @@ namespace Sitecore.Reference.Storefront.Managers
         /// <summary>
         /// Removes the wish list lines.
         /// </summary>
-        /// <param name="storefront">The storefront.</param>
-        /// <param name="visitorContext">The visitor context.</param>
-        /// <param name="wishListId">The wish list identifier.</param>
-        /// <param name="models">The models.</param>
-        /// <returns>The manager response with the wish list as the result.</returns>
-        public virtual ManagerResponse<RemoveWishListLinesResult, WishList> RemoveWishListLines([NotNull] CommerceStorefront storefront, [NotNull] VisitorContext visitorContext, string wishListId, IEnumerable<WishListLineInputModel> models)
+        /// <param name="storefront">
+        /// The storefront.
+        /// </param>
+        /// <param name="userId">
+        /// The user Id.
+        /// </param>
+        /// <param name="wishListId">
+        /// The wish list identifier.
+        /// </param>
+        /// <param name="models">
+        /// The models.
+        /// </param>
+        /// <returns>
+        /// The manager response with the wish list as the result.
+        /// </returns>
+        public virtual ManagerResponse<RemoveWishListLinesResult, WishList> RemoveWishListLines([NotNull] CommerceStorefront storefront, [NotNull] string userId, string wishListId, IEnumerable<WishListLineInputModel> models)
         {
             Assert.ArgumentNotNull(storefront, "storefront");
-            Assert.ArgumentNotNull(visitorContext, "visitorContext");
             Assert.ArgumentNotNull(models, "models");
             Assert.ArgumentNotNullOrEmpty(wishListId, "wishListId");
 
             var productIds = models.Select(model => string.IsNullOrEmpty(model.VariantId) ? model.ProductId : model.VariantId).ToList();
-            var request = new RemoveWishListLinesRequest(new WishList { UserId = visitorContext.UserId, CustomerId = visitorContext.UserId, ExternalId = wishListId, ShopName = storefront.ShopName }, productIds);
+            var request = new RemoveWishListLinesRequest(new WishList { UserId = userId, CustomerId = userId, ExternalId = wishListId, ShopName = storefront.ShopName }, productIds);
             var result = this.WishListServiceProvider.RemoveWishListLines(request);
-            if (!result.Success)
-            {
-                Helpers.LogSystemMessages(result.SystemMessages, result);
-            }
+            
+            result.WriteToSitecoreLog();
 
             return new ManagerResponse<RemoveWishListLinesResult, WishList>(result, result.WishList);
         }
@@ -240,28 +249,35 @@ namespace Sitecore.Reference.Storefront.Managers
         /// <summary>
         /// Updates the wish list lines.
         /// </summary>
-        /// <param name="storefront">The storefront.</param>
-        /// <param name="visitorContext">The visitor context.</param>
-        /// <param name="wishListId">The wish list identifier.</param>
-        /// <param name="lines">The lines.</param>
-        /// <returns>The manager response with the wish list as the result.</returns>
-        public virtual ManagerResponse<UpdateWishListLinesResult, WishList> UpdateWishListLines([NotNull] CommerceStorefront storefront, [NotNull] VisitorContext visitorContext, string wishListId, IEnumerable<WishListLine> lines)
+        /// <param name="storefront">
+        /// The storefront.
+        /// </param>
+        /// <param name="userId">
+        /// The user Id.
+        /// </param>
+        /// <param name="wishListId">
+        /// The wish list identifier.
+        /// </param>
+        /// <param name="lines">
+        /// The lines.
+        /// </param>
+        /// <returns>
+        /// The manager response with the wish list as the result.
+        /// </returns>
+        public virtual ManagerResponse<UpdateWishListLinesResult, WishList> UpdateWishListLines([NotNull] CommerceStorefront storefront, [NotNull] string userId, string wishListId, IEnumerable<WishListLine> lines)
         {
             Assert.ArgumentNotNull(storefront, "storefront");
-            Assert.ArgumentNotNull(visitorContext, "visitorContext");
             Assert.ArgumentNotNull(lines, "lines");
             Assert.ArgumentNotNullOrEmpty(wishListId, "wishListId");
 
-            var request = new UpdateWishListLinesRequest(new WishList { UserId = visitorContext.UserId, CustomerId = visitorContext.UserId, ExternalId = wishListId, ShopName = storefront.ShopName }, lines);
+            var request = new UpdateWishListLinesRequest(new WishList { UserId = userId, CustomerId = userId, ExternalId = wishListId, ShopName = storefront.ShopName }, lines);
             var result = this.WishListServiceProvider.UpdateWishListLines(request);
             if (result.Success && result.WishList != null)
             {
                 this.PopulateStockInformation(storefront, result.WishList);
             }
-            else if (!result.Success)
-            {
-                Helpers.LogSystemMessages(result.SystemMessages, result);
-            }
+            
+            result.WriteToSitecoreLog();
 
             return new ManagerResponse<UpdateWishListLinesResult, WishList>(result, result.WishList);
         }
@@ -269,14 +285,21 @@ namespace Sitecore.Reference.Storefront.Managers
         /// <summary>
         /// Updates a single wish list line.
         /// </summary>
-        /// <param name="storefront">The storefront.</param>
-        /// <param name="visitorContext">The visitor context.</param>
-        /// <param name="model">The model.</param>
-        /// <returns>The manager response with the updated wish list as the result.</returns>
-        public virtual ManagerResponse<UpdateWishListLinesResult, WishList> UpdateWishListLine([NotNull] CommerceStorefront storefront, [NotNull] VisitorContext visitorContext, [NotNull] WishListLineInputModel model)
+        /// <param name="storefront">
+        /// The storefront.
+        /// </param>
+        /// <param name="userId">
+        /// The user Id.
+        /// </param>
+        /// <param name="model">
+        /// The model.
+        /// </param>
+        /// <returns>
+        /// The manager response with the updated wish list as the result.
+        /// </returns>
+        public virtual ManagerResponse<UpdateWishListLinesResult, WishList> UpdateWishListLine([NotNull] CommerceStorefront storefront, [NotNull] string userId, [NotNull] WishListLineInputModel model)
         {
             Assert.ArgumentNotNull(storefront, "storefront");
-            Assert.ArgumentNotNull(visitorContext, "visitorContext");
             Assert.ArgumentNotNull(model, "model");
             Assert.ArgumentNotNullOrEmpty(model.WishListId, "model.WishListId");
             Assert.ArgumentNotNullOrEmpty(model.ProductId, "model.ProductId");
@@ -288,48 +311,55 @@ namespace Sitecore.Reference.Storefront.Managers
                 Quantity = model.Quantity
             };
 
-            return this.UpdateWishListLines(storefront, visitorContext, model.WishListId, new List<WishListLine> { wishListLine });
+            return this.UpdateWishListLines(storefront, userId, model.WishListId, new List<WishListLine> { wishListLine });
         }
 
         /// <summary>
         /// Adds the lines to wish list.
         /// </summary>
-        /// <param name="storefront">The storefront.</param>
-        /// <param name="visitorContext">The visitor context.</param>
-        /// <param name="wishListId">The wish list identifier.</param>
-        /// <param name="lines">The lines.</param>
-        /// <returns>The manager response with the wish list as the result.</returns>
-        public virtual ManagerResponse<AddLinesToWishListResult, WishList> AddLinesToWishList([NotNull] CommerceStorefront storefront, [NotNull] VisitorContext visitorContext, string wishListId, IEnumerable<WishListLine> lines)
+        /// <param name="storefront">
+        /// The storefront.
+        /// </param>
+        /// <param name="userId">
+        /// The user Id.
+        /// </param>
+        /// <param name="wishListId">
+        /// The wish list identifier.
+        /// </param>
+        /// <param name="lines">
+        /// The lines.
+        /// </param>
+        /// <returns>
+        /// The manager response with the wish list as the result.
+        /// </returns>
+        public virtual ManagerResponse<AddLinesToWishListResult, WishList> AddLinesToWishList([NotNull] CommerceStorefront storefront, [NotNull] string userId, string wishListId, IEnumerable<WishListLine> lines)
         {
             Assert.ArgumentNotNull(storefront, "storefront");
-            Assert.ArgumentNotNull(visitorContext, "visitorContext");
             Assert.ArgumentNotNull(lines, "lines");
             Assert.ArgumentNotNullOrEmpty(wishListId, "wishListId");
 
             var errorResult = new AddLinesToWishListResult() { Success = false };
 
             // Limit the number of wish list lines that can get created.
-            var wishListResult = this.GetWishList(storefront, visitorContext, wishListId);
+            var wishListResult = this.GetWishList(storefront, userId, wishListId);
             if (!wishListResult.ServiceProviderResult.Success)
             {
                 wishListResult.ServiceProviderResult.SystemMessages.ToList().ForEach(m => errorResult.SystemMessages.Add(m));
                 return new ManagerResponse<AddLinesToWishListResult, WishList>(errorResult, null);
             }
 
-            if (wishListResult.Result.Lines.Count() >= StorefrontManager.CurrentStorefront.MaxNumberOfWishListItems)
+            if (wishListResult.Result.Lines.Count() >= 10)
             {
-                var message = StorefrontManager.GetSystemMessage(StorefrontConstants.SystemMessages.MaxWishListLineLimitReached);
-                message = string.Format(CultureInfo.InvariantCulture, message, StorefrontManager.CurrentStorefront.MaxNumberOfWishLists);
-                errorResult.SystemMessages.Add(new Commerce.Services.SystemMessage() { Message = message });
+                var message = "You have reached the max limit of wish list items";
+                message = string.Format(CultureInfo.InvariantCulture, message, 10);
+                errorResult.SystemMessages.Add(new SystemMessage() { Message = message });
                 return new ManagerResponse<AddLinesToWishListResult, WishList>(errorResult, null);
             }
 
-            var request = new AddLinesToWishListRequest(new WishList { UserId = visitorContext.UserId, CustomerId = visitorContext.UserId, ExternalId = wishListId, ShopName = storefront.ShopName }, lines);
+            var request = new AddLinesToWishListRequest(new WishList { UserId = userId, CustomerId = userId, ExternalId = wishListId, ShopName = storefront.ShopName }, lines);
             var result = this.WishListServiceProvider.AddLinesToWishList(request);
-            if (!result.Success)
-            {
-                Helpers.LogSystemMessages(result.SystemMessages, result);
-            }
+            
+            result.WriteToSitecoreLog();
 
             return new ManagerResponse<AddLinesToWishListResult, WishList>(result, result.WishList);
         }
@@ -337,16 +367,21 @@ namespace Sitecore.Reference.Storefront.Managers
         /// <summary>
         /// Adds the lines to wish list.
         /// </summary>
-        /// <param name="storefront">The storefront.</param>
-        /// <param name="visitorContext">The visitor context.</param>
-        /// <param name="model">The model.</param>
+        /// <param name="storefront">
+        /// The storefront.
+        /// </param>
+        /// <param name="userId">
+        /// The user Id.
+        /// </param>
+        /// <param name="model">
+        /// The model.
+        /// </param>
         /// <returns>
         /// The manager response with the wish list as the result.
         /// </returns>
-        public virtual ManagerResponse<AddLinesToWishListResult, WishList> AddLinesToWishList([NotNull] CommerceStorefront storefront, [NotNull] VisitorContext visitorContext, AddToWishListInputModel model)
+        public virtual ManagerResponse<AddLinesToWishListResult, WishList> AddLinesToWishList([NotNull] CommerceStorefront storefront, [NotNull] string userId, AddToWishListInputModel model)
         {
             Assert.ArgumentNotNull(storefront, "storefront");
-            Assert.ArgumentNotNull(visitorContext, "visitorContext");
             Assert.ArgumentNotNull(model, "model");
 
             var product = new CommerceCartProduct
@@ -362,7 +397,7 @@ namespace Sitecore.Reference.Storefront.Managers
                 Quantity = model.Quantity == null ? 1 : (uint)model.Quantity
             };
 
-            if (line.Product.ProductId.Equals(storefront.GiftCardProductId, StringComparison.OrdinalIgnoreCase))
+            if (line.Product.ProductId.Equals("22565422120", StringComparison.OrdinalIgnoreCase))
             {
                 line.Properties.Add("GiftCardAmount", model.GiftCardAmount);
             }
@@ -370,7 +405,7 @@ namespace Sitecore.Reference.Storefront.Managers
             // create wish list
             if (model.WishListId == null && !string.IsNullOrEmpty(model.WishListName))
             {
-                var newList = this.CreateWishList(storefront, visitorContext, model.WishListName).Result;
+                var newList = this.CreateWishList(storefront, userId, model.WishListName).Result;
                 if (newList == null)
                 {
                     return new ManagerResponse<AddLinesToWishListResult, WishList>(new AddLinesToWishListResult { Success = false }, null);
@@ -379,7 +414,7 @@ namespace Sitecore.Reference.Storefront.Managers
                 model.WishListId = newList.ExternalId;
             }
 
-            var result = this.AddLinesToWishList(storefront, visitorContext, model.WishListId, new List<WishListLine> { line });
+            var result = this.AddLinesToWishList(storefront, userId, model.WishListId, new List<WishListLine> { line });
 
             return new ManagerResponse<AddLinesToWishListResult, WishList>(result.ServiceProviderResult, result.ServiceProviderResult.WishList);
         }
@@ -387,23 +422,26 @@ namespace Sitecore.Reference.Storefront.Managers
         /// <summary>
         /// Updates the wish list.
         /// </summary>
-        /// <param name="storefront">The storefront.</param>
-        /// <param name="visitorContext">The visitor context.</param>
-        /// <param name="model">The model.</param>
+        /// <param name="storefront">
+        /// The storefront.
+        /// </param>
+        /// <param name="userId">
+        /// The user Id.
+        /// </param>
+        /// <param name="model">
+        /// The model.
+        /// </param>
         /// <returns>
         /// The manager response with the wish list as the result.
         /// </returns>
-        public virtual ManagerResponse<UpdateWishListResult, WishList> UpdateWishList([NotNull] CommerceStorefront storefront, [NotNull] VisitorContext visitorContext, UpdateWishListInputModel model)
+        public virtual ManagerResponse<UpdateWishListResult, WishList> UpdateWishList([NotNull] CommerceStorefront storefront, [NotNull] string userId, UpdateWishListInputModel model)
         {
             Assert.ArgumentNotNull(storefront, "storefront");
-            Assert.ArgumentNotNull(visitorContext, "visitorContext");
 
-            var request = new UpdateWishListRequest(new WishList { UserId = visitorContext.UserId, CustomerId = visitorContext.UserId, ExternalId = model.ExternalId, Name = model.Name, IsFavorite = model.IsFavorite, ShopName = storefront.ShopName });
+            var request = new UpdateWishListRequest(new WishList { UserId = userId, CustomerId = userId, ExternalId = model.ExternalId, Name = model.Name, IsFavorite = model.IsFavorite, ShopName = storefront.ShopName });
             var result = this.WishListServiceProvider.UpdateWishList(request);
-            if (!result.Success)
-            {
-                Helpers.LogSystemMessages(result.SystemMessages, result);
-            }
+            
+            result.WriteToSitecoreLog();
 
             return new ManagerResponse<UpdateWishListResult, WishList>(result, result.WishList);
         }
@@ -421,7 +459,7 @@ namespace Sitecore.Reference.Storefront.Managers
         {
             var productList = wishList.Lines.Select(line => new CommerceInventoryProduct { ProductId = line.Product.ProductId, CatalogName = ((CommerceCartProduct)line.Product).ProductCatalog }).ToList();
 
-            var stockInfos = this.InventoryManager.GetStockInformation(storefront, productList, StockDetailsLevel.All).Result;
+            var stockInfos = this.InventoryManager.GetStockInformation(productList, StockDetailsLevel.All).Result;
             if (stockInfos == null)
             {
                 return;
@@ -436,23 +474,23 @@ namespace Sitecore.Reference.Storefront.Managers
                 }
 
                 line.Product.StockStatus = new StockStatus(System.Convert.ToInt32((decimal)stockInfo.Properties["OnHandQuantity"]), stockInfo.Status.Name);
-                this.InventoryManager.VisitedProductStockStatus(storefront, stockInfo, string.Empty);
+                this.InventoryManager.VisitedProductStockStatus(stockInfo, string.Empty);
             }
         }
 
         /// <summary>
         /// Populates the price information.
         /// </summary>
-        /// <param name="storefront">The storefront.</param>
-        /// <param name="visitorContext">The visitor context.</param>
-        /// <param name="wishList">The wish list.</param>
-        protected virtual void PopulatePriceInformation(CommerceStorefront storefront, VisitorContext visitorContext, WishList wishList)
+        /// <param name="wishList">
+        /// The wish list.
+        /// </param>
+        protected virtual void PopulatePriceInformation(WishList wishList)
         {
             if (wishList.Lines != null && wishList.Lines.Any())
             {
                 string catalogName = ((CommerceCartProduct)wishList.Lines[0].Product).ProductCatalog;
                 var productIds = wishList.Lines.Select(l => l.Product.ProductId).ToArray();
-                var pricesResponse = this.PricingManager.GetProductBulkPrices(StorefrontManager.CurrentStorefront, visitorContext, catalogName, productIds);
+                var pricesResponse = this.PricingManager.GetProductBulkPrices(catalogName, productIds);
 
                 var prices = pricesResponse != null && pricesResponse.ServiceProviderResult.Success && pricesResponse.Result != null ? pricesResponse.Result : new Dictionary<string, Price>();
 

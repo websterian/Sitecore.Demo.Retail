@@ -255,6 +255,7 @@
     <Compile Include="Configuration\IdentityProviderType.cs" />
     <Compile Include="Configuration\RetailConfiguration.cs" />
     <Compile Include="Constants.cs" />
+    <Compile Include="Controllers\AXBaseController.cs" />
     <Compile Include="Extensions\HtmlExtensions.cs" />
     <Compile Include="Extensions\ItemExtensions.cs" />
     <Compile Include="Extensions\SiteContextExtensions.cs" />
@@ -296,6 +297,8 @@
     <Compile Include="Managers\CountryManager.cs" />
     <Compile Include="Managers\GiftCardManager.cs" />
     <Compile Include="Managers\CurrencyManager.cs" />
+    <Compile Include="Managers\LoyaltyProgramManager.cs" />
+    <Compile Include="Managers\WishListManager.cs" />
     <Compile Include="Models\Address.cs" />
     <Compile Include="Models\ApiControllerMapping.cs" />
     <Compile Include="Models\ErrorApiModel.cs" />
@@ -309,6 +312,13 @@
     <Compile Include="Managers\InventoryManager.cs" />
     <Compile Include="Models\ICatalogProduct.cs" />
     <Compile Include="Models\ICommerceUser.cs" />
+    <Compile Include="Models\InputModels\AddToWishListInputModel.cs" />
+    <Compile Include="Models\InputModels\CreateWishListInputModel.cs" />
+    <Compile Include="Models\InputModels\LoyaltyCardInputModelItem.cs" />
+    <Compile Include="Models\InputModels\LoyaltyCardPaymentInputModelItem.cs" />
+    <Compile Include="Models\InputModels\UpdateWishListInputModel.cs" />
+    <Compile Include="Models\InputModels\WishListInputModel.cs" />
+    <Compile Include="Models\InputModels\WishListLineInputModel.cs" />
     <Compile Include="Models\IParty.cs" />
     <Compile Include="Models\IProductVariant.cs" />
     <Compile Include="Models\ICatalogProductVariant.cs" />

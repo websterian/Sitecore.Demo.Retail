@@ -15,22 +15,25 @@
 // and limitations under the License.
 // -------------------------------------------------------------------------------------------
 
-using System;
-using System.Collections.Generic;
-using Sitecore.Commerce.Entities.Prices;
-using Sitecore.Commerce.Connect.CommerceServer.Orders.Models;
-using Sitecore.Commerce.Services;
-using Sitecore.Commerce.Services.Prices;
-using Sitecore.Diagnostics;
-using Sitecore.Foundation.Commerce.Extensions;
-using Sitecore.Foundation.Commerce.Models;
-using Sitecore.Web;
 //using GetProductBulkPricesRequest = Sitecore.Commerce.Engine.Connect.Services.Prices.GetProductBulkPricesRequest;
 //using GetProductPricesRequest = Sitecore.Commerce.Engine.Connect.Services.Prices.GetProductPricesRequest;
-using GetSupportedCurrenciesRequest = Sitecore.Foundation.Commerce.Infrastructure.Connect.Arguments.GetSupportedCurrenciesRequest;
 
 namespace Sitecore.Foundation.Commerce.Managers
 {
+    using System;
+    using System.Collections.Generic;
+
+    using Sitecore.Commerce.Connect.CommerceServer.Orders.Models;
+    using Sitecore.Commerce.Entities.Prices;
+    using Sitecore.Commerce.Services;
+    using Sitecore.Commerce.Services.Prices;
+    using Sitecore.Diagnostics;
+    using Sitecore.Foundation.Commerce.Extensions;
+    using Sitecore.Foundation.Commerce.Models;
+    using Sitecore.Web;
+
+    using GetSupportedCurrenciesRequest = Sitecore.Foundation.Commerce.Infrastructure.Connect.Arguments.GetSupportedCurrenciesRequest;
+
     public class PricingManager : IManager
     {
         private static readonly string[] _defaultPriceTypeIds = {PriceTypes.List, PriceTypes.Adjusted, PriceTypes.LowestPricedVariant, PriceTypes.LowestPricedVariantListPrice, PriceTypes.HighestPricedVariant};

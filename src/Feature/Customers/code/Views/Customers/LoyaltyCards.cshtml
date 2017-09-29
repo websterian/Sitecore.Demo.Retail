@@ -1,0 +1,121 @@
+﻿@*//-----------------------------------------------------------------------
+// Copyright 2016 Sitecore Corporation A/S
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file
+// except in compliance with the License. You may obtain a copy of the License at
+//       http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software distributed under the
+// License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+// either express or implied. See the License for the specific language governing permissions
+// and limitations under the License.
+// -------------------------------------------------------------------------------------------*@
+
+@using Sitecore.Foundation.Commerce.Extensions
+
+<div id="loyaltyCardsSection">
+    <div id="loyaltyCards" data-bind="if: isNotEmpty">
+        <div>@Html.Sitecore().Text("/Customers/Loyalty/Your loyalty card", "Your loyalty card")</div>
+        <div>
+            <div class="form-group">
+                <label for="loyaltyCardChange">@Html.Sitecore().Text("/Customers/Loyalty/Card number", "Card number")</label>
+                <select id="loyaltyCardChange" class="form-control" data-bind='options: LoyaltyCards(), optionsValue : "CardNumber", optionsText: "CardNumber", value: selectedCard'></select>
+            </div>
+        </div>
+        <br/>
+        <div id="eachCard" data-bind="with: $root.card">
+            <div>@Html.Sitecore().Text("/Customers/Loyalty/Programs per card", "Programs per card")</div>
+            <div data-bind="foreach: Programs">
+                <div data-bind="click: $root.changeTiers, css: $root.program().ProgramId == ProgramId ? 'selected' : 'un-selected'">
+                    <label data-bind="text: Name"></label>
+                    <div class="clearfix"></div>
+                </div>
+            </div>
+            <br/>
+            <div data-bind="with: $root.program">
+                <div>@Html.Sitecore().Text("/Customers/Loyalty/Tier progress", "Tier progress")</div>
+                <div data-bind="foreach: LoyaltyTiers">
+                    <div data-bind="visible: IsElegible == true">
+                        <label data-bind="text: Description"></label>
+                        <div class="expiration-date">
+                            @Html.Sitecore().Text("/Customers/Loyalty/Expires", "Expires") <span data-bind="text: ValidTo"></span>
+                        </div>
+                        <div class="clearfix"></div>
+                    </div>
+                    <div data-bind="visible: IsElegible == false">
+                        <label data-bind="text: Description"></label>
+                        <span class="not-avaliable">@Html.Sitecore().Text("/Customers/Loyalty/Not yet eligible", "Not yet eligible")</span>
+                        <div class="clearfix"></div>
+                    </div>
+                </div>
+            </div>
+            <br/>
+            <div>
+                <div>@Html.Sitecore().Text("/Customers/Loyalty/Points per card", "Points per card")</div>
+                <div data-bind="foreach: RewardPoints">
+                    <div data-bind="click: $root.changeTransactions">
+                        <label data-bind="text: Description"></label>
+                        <div data-bind="css: $root.point().RewardPointId == RewardPointId ? 'selected' : 'un-selected'">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>@Html.Sitecore().Text("/Customers/Loyalty/Issued points", "Issued points")</th>
+                                        <th>@Html.Sitecore().Text("/Customers/Loyalty/Active points", "Active points")</th>
+                                        <th>@Html.Sitecore().Text("/Customers/Loyalty/Used points", "Used points")</th>
+                                        <th>@Html.Sitecore().Text("/Customers/Loyalty/Expired points", "Expired points")</th>
+                                        <th>@Html.Sitecore().Text("/Customers/Loyalty/Type", "Type")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td data-bind="text: IssuedPoints"></td>
+                                        <td data-bind="text: ActivePoints"></td>
+                                        <td data-bind="text: UsedPoints"></td>
+                                        <td data-bind="text: ExpiredPoints"></td>
+                                        <td data-bind="text: RewardPointType"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="clearfix"></div>
+                    </div>
+                </div>
+            </div>
+            <br/>
+            <div data-bind="with: $root.point">
+                <div>@Html.Sitecore().Text("/Customers/Loyalty/Transaction history", "Transaction history")</div>
+                <div>
+                    <table class="table table-hover">
+                        <thead>
+                        <tr>
+                            <th>@Html.Sitecore().Text("/Customers/Loyalty/Transaction number", "Transaction number")</th>
+                            <th>@Html.Sitecore().Text("/Customers/Loyalty/Date", "Date")</th>
+                            <th>@Html.Sitecore().Text("/Customers/Loyalty/Time", "Time")</th>
+                            <th>@Html.Sitecore().Text("/Customers/Loyalty/Store", "Store")</th>
+                            <th>@Html.Sitecore().Text("/Customers/Loyalty/Type", "Type")</th>
+                            <th>@Html.Sitecore().Text("/Customers/Loyalty/Points", "Points")</th>
+                            <th>@Html.Sitecore().Text("/Customers/Loyalty/Expiration date", "Expiration date")</th>
+                        </tr>
+                        </thead>
+                        <tbody data-bind="foreach: Transactions">
+                            <tr data-bind="css: {'odd': $index() % 2 == 0}">
+                                <td data-bind="text: ExternalId"></td>
+                                <td data-bind="text: EntryDate"></td>
+                                <td data-bind="text: EntryTime"></td>
+                                <td data-bind="text: Store"></td>
+                                <td data-bind="text: EntryType"></td>
+                                <td data-bind="text: Points"></td>
+                                <td data-bind="text: ExpirationDate"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="text/javascript">
+    $(document).ready(function () {
+        initLoyaltyCards("loyaltyCardsSection");
+    });
+</script>

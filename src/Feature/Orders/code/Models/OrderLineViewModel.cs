@@ -1,6 +1,5 @@
-using System.Collections;
 using System.Collections.Generic;
-using Sitecore.Commerce.Connect.CommerceServer.Orders.Models;
+
 using Sitecore.Data.Items;
 using Sitecore.Foundation.Commerce.Models;
 

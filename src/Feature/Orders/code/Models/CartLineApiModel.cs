@@ -15,17 +15,14 @@
 // and limitations under the License.
 // -------------------------------------------------------------------------------------------
 
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using Sitecore.Commerce.Connect.CommerceServer;
+
 using Sitecore.Commerce.Connect.CommerceServer.Orders.Models;
 using Sitecore.Commerce.Entities.Carts;
 using Sitecore.Commerce.Entities.Shipping;
 using Sitecore.Data.Items;
 using Sitecore.Foundation.Commerce.Extensions;
-using Sitecore.Foundation.Commerce.Infrastructure.SitecorePipelines;
-using Sitecore.Foundation.Commerce.Managers;
 using Sitecore.Foundation.Commerce.Models;
 using Sitecore.Foundation.Commerce.Util;
 using Sitecore.Foundation.SitecoreExtensions.Extensions;

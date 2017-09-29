@@ -15,35 +15,37 @@
 // and limitations under the License.
 // -------------------------------------------------------------------------------------------
 
-namespace Sitecore.Reference.Storefront.Managers
+namespace Sitecore.Foundation.Commerce.Managers
 {
-    using Sitecore.Reference.Storefront.Models.SitecoreItemModels;
-    using Sitecore.Diagnostics;
-    using Sitecore.Commerce.Connect.DynamicsRetail.Services.LoyaltyPrograms;
-    using Sitecore.Commerce.Services.LoyaltyPrograms;
-    using Sitecore.Commerce.Entities.LoyaltyPrograms;
-    using Sitecore.Commerce.Connect.CommerceServer.Orders.Models;
     using System.Collections.Generic;
-    using System.Linq;
     using System.Globalization;
+    using System.Linq;
+
+    using Sitecore.Commerce.Connect.CommerceServer.Orders.Models;
+    using Sitecore.Commerce.Connect.DynamicsRetail.Services.LoyaltyPrograms;
+    using Sitecore.Commerce.Entities.LoyaltyPrograms;
+    using Sitecore.Commerce.Services;
+    using Sitecore.Commerce.Services.LoyaltyPrograms;
+    using Sitecore.Diagnostics;
+    using Sitecore.Foundation.Commerce.Extensions;
+    using Sitecore.Foundation.Commerce.Models;
 
     /// <summary>
     /// Defines the LoyaltyProgramManager class.
     /// </summary>
-    public class LoyaltyProgramManager : BaseManager
+    public class LoyaltyProgramManager : IManager
     {
         #region Constructors
+
+
 
         /// <summary>
         /// Initializes a new instance of the <see cref="LoyaltyProgramManager" /> class.
         /// </summary>
         /// <param name="loyaltyProgramServiceProvider">The loyalty program service provider.</param>
         /// <param name="cartManager">The cart manager.</param>
-        public LoyaltyProgramManager([NotNull] LoyaltyCardServiceProvider loyaltyProgramServiceProvider, [NotNull] CartManager cartManager)
+        public LoyaltyProgramManager(LoyaltyCardServiceProvider loyaltyProgramServiceProvider, CartManager cartManager)
         {
-            Assert.ArgumentNotNull(loyaltyProgramServiceProvider, "loyaltyProgramServiceProvider");
-            Assert.ArgumentNotNull(cartManager, "cartManager");
-
             this.LoyaltyProgramServiceProvider = loyaltyProgramServiceProvider;
             this.CartManager = cartManager;
         }
@@ -75,15 +77,19 @@ namespace Sitecore.Reference.Storefront.Managers
         /// <summary>
         /// Activates the loyalty account for the current user cart.
         /// </summary>
-        /// <param name="storefront">The storefront.</param>
-        /// <param name="visitorContext">The visitor context.</param>
+        /// <param name="storefront">
+        /// The storefront.
+        /// </param>
+        /// <param name="userId">
+        /// The user Id.
+        /// </param>
         /// <returns>
         /// The manager response where the loyalty card is returned in the Result.
         /// </returns>
-        public virtual ManagerResponse<JoinLoyaltyProgramResult, LoyaltyCard> ActivateAccount([NotNull] CommerceStorefront storefront, [NotNull] VisitorContext visitorContext)
+        public virtual ManagerResponse<JoinLoyaltyProgramResult, LoyaltyCard> ActivateAccount([NotNull] CommerceStorefront storefront, string userId)
         {
             var result = new JoinLoyaltyProgramResult { Success = false };
-            var cartResult = this.CartManager.GetCurrentCart(storefront, visitorContext, false);
+            var cartResult = this.CartManager.GetCart(userId);
             if (!cartResult.ServiceProviderResult.Success || cartResult.Result == null)
             {
                 result.SystemMessages.ToList().AddRange(cartResult.ServiceProviderResult.SystemMessages);
@@ -93,27 +99,28 @@ namespace Sitecore.Reference.Storefront.Managers
             var errorResult = new JoinLoyaltyProgramResult() { Success = false };
 
             // Limit the number of loyalty programs a user may join.
-            var currentLoyaltyProgramResult = this.GetLoyaltyCards(storefront, visitorContext.UserId, false);
+            var currentLoyaltyProgramResult = this.GetLoyaltyCards(storefront, userId, false);
             if (!currentLoyaltyProgramResult.ServiceProviderResult.Success)
             {
                 currentLoyaltyProgramResult.ServiceProviderResult.SystemMessages.ToList().ForEach(m => errorResult.SystemMessages.Add(m));
                 return new ManagerResponse<JoinLoyaltyProgramResult, LoyaltyCard>(errorResult, null);
             }
 
-            int maxLoyaltyProgramsToJoin = ((DynamicsStorefront)StorefrontManager.CurrentStorefront).MaxNumberOfLoyaltyProgramsToJoin;
+            //TODO : Replace with call to Sitecore config item
+            var maxLoyaltyProgramsToJoin = 10;
             if (currentLoyaltyProgramResult.Result.Count() >= maxLoyaltyProgramsToJoin)
             {
-                var message = StorefrontManager.GetSystemMessage(StorefrontConstants.SystemMessages.MaxLoyaltyProgramsToJoinReached);
+                var message = "You have reached the maximum number of loyalty programs to join {0}";
                 message = string.Format(CultureInfo.InvariantCulture, message, maxLoyaltyProgramsToJoin);
-                errorResult.SystemMessages.Add(new Commerce.Services.SystemMessage() { Message = message });
+                errorResult.SystemMessages.Add(new SystemMessage() { Message = message });
                 return new ManagerResponse<JoinLoyaltyProgramResult, LoyaltyCard>(errorResult, null);
             }
             
             var cart = (CommerceCart)cartResult.ServiceProviderResult.Cart;
-            var request = new Sitecore.Commerce.Connect.DynamicsRetail.Services.LoyaltyPrograms.JoinLoyaltyProgramRequest(visitorContext.UserId, storefront.ShopName) { CartId = cart.ExternalId };
+            var request = new Sitecore.Commerce.Connect.DynamicsRetail.Services.LoyaltyPrograms.JoinLoyaltyProgramRequest(userId, storefront.ShopName) { CartId = cart.ExternalId };
             result = this.LoyaltyProgramServiceProvider.JoinLoyaltyProgram(request);
 
-            Helpers.LogSystemMessages(result.SystemMessages, result);
+            result.WriteToSitecoreLog();
             return new ManagerResponse<JoinLoyaltyProgramResult, LoyaltyCard>(result, result.LoyaltyCard);
         }
 
@@ -126,14 +133,13 @@ namespace Sitecore.Reference.Storefront.Managers
         /// <returns>
         /// The manager response where the result is returned indicating the success or failure of the operation.
         /// </returns>
-        public virtual ManagerResponse<UpdateLoyaltyCardIdResult, bool> AssociateLoyaltyCardWithCurrentCart([NotNull] CommerceStorefront storefront, [NotNull] VisitorContext visitorContext, string loyaltyCardNumber)
+        public virtual ManagerResponse<UpdateLoyaltyCardIdResult, bool> AssociateLoyaltyCardWithCurrentCart([NotNull] CommerceStorefront storefront, string userId, string loyaltyCardNumber)
         {
             Assert.ArgumentNotNull(storefront, "storefront");
-            Assert.ArgumentNotNull(visitorContext, "visitorContext");
             Assert.ArgumentNotNullOrEmpty(loyaltyCardNumber, "loyaltyCardNumber");
 
             var result = new UpdateLoyaltyCardIdResult { Success = false };
-            var cartResult = this.CartManager.GetCurrentCart(storefront, visitorContext);
+            var cartResult = this.CartManager.GetCart(userId);
             if (!cartResult.ServiceProviderResult.Success || cartResult.Result == null)
             {
                 result.SystemMessages.ToList().AddRange(cartResult.ServiceProviderResult.SystemMessages);
@@ -142,10 +148,10 @@ namespace Sitecore.Reference.Storefront.Managers
 
             var cart = cartResult.ServiceProviderResult.Cart;
 
-            var request = new UpdateLoyaltyCardIdRequest(visitorContext.UserId, loyaltyCardNumber, cart.ExternalId);
+            var request = new UpdateLoyaltyCardIdRequest(userId, loyaltyCardNumber, cart.ExternalId);
             result = this.LoyaltyProgramServiceProvider.UpdateLoyaltyCardId(request);
             
-            Helpers.LogSystemMessages(result.SystemMessages, result);
+            result.WriteToSitecoreLog();
             return new ManagerResponse<UpdateLoyaltyCardIdResult, bool>(result, result.Success);
         }
 
@@ -169,8 +175,7 @@ namespace Sitecore.Reference.Storefront.Managers
             {
                 return new ManagerResponse<GetLoyaltyCardsResult, IEnumerable<LoyaltyCard>>(result, result.LoyaltyCards.ToList());
             }
-
-            Helpers.LogSystemMessages(result.SystemMessages, result);
+            result.WriteToSitecoreLog();
             return new ManagerResponse<GetLoyaltyCardsResult, IEnumerable<LoyaltyCard>>(result, new List<LoyaltyCard>());
         }
 
@@ -190,7 +195,7 @@ namespace Sitecore.Reference.Storefront.Managers
                 return new ManagerResponse<GetLoyaltyCardTransactionsResult, IEnumerable<LoyaltyCardTransaction>>(result, result.LoyaltyCardTransactions);
             }
 
-            Helpers.LogSystemMessages(result.SystemMessages, result);
+            result.WriteToSitecoreLog();
             return new ManagerResponse<GetLoyaltyCardTransactionsResult, IEnumerable<LoyaltyCardTransaction>>(result, new List<LoyaltyCardTransaction>());
         }
 

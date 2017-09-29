@@ -1,7 +1,8 @@
 ﻿//-----------------------------------------------------------------------
-// <copyright file="OrderConfirmationModel.cs" company="Sitecore Corporation">
+// <copyright file="LoyaltyCardInputModelItem.cs" company="Sitecore Corporation">
 //     Copyright (c) Sitecore Corporation 1999-2016
 // </copyright>
+// <summary>InputModel item parameter accepting loyalty card payment information.</summary>
 //-----------------------------------------------------------------------
 // Copyright 2016 Sitecore Corporation A/S
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file 
@@ -14,22 +15,22 @@
 // and limitations under the License.
 // -------------------------------------------------------------------------------------------
 
-using Sitecore.Mvc.Presentation;
-
-namespace Sitecore.Feature.Commerce.Orders.Models
+namespace Sitecore.Foundation.Commerce.Models.InputModels
 {
-    public class OrderConfirmationViewModel : RenderingModel
+    using System.ComponentModel.DataAnnotations;
+
+    /// <summary>
+    /// Defines tghe LoyaltyCardInputModelItem class.
+    /// </summary>
+    public class LoyaltyCardInputModelItem
     {
-        public string ConfirmationId { get; set; }
-
-        public string OrderStatus { get; set; }
-
-        public void Initialize(Rendering renderings, string confirmationId, string orderStatus)
-        {
-            base.Initialize(renderings);
-
-            ConfirmationId = confirmationId;
-            OrderStatus = orderStatus;
-        }
+        /// <summary>
+        /// Gets or sets the loyalty card number.
+        /// </summary>
+        /// <value>
+        /// The loyalty card number.
+        /// </value>
+        [Required]
+        public string LoyaltyCardNumber { get; set; }
     }
 }
