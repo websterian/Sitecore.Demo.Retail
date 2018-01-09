@@ -1,5 +1,5 @@
 module.exports = function() {
-  var instanceRoot = "C:\\websites\\habitat.dev.local";
+    var instanceRoot = "C:\\inetpub\\sc82u1";
   var config = {
     websiteRoot: instanceRoot + "\\Website",
     sitecoreLibraries: instanceRoot + "\\Website\\bin",
@@ -9,7 +9,7 @@ module.exports = function() {
     buildPlatform: "Any CPU",
     publishPlatform: "AnyCpu",
     runCleanBuilds: false,
-    commerceServerSiteName: "Habitat",
+    commerceServerSiteName: "storefront",
     commerceEngineRoot: instanceRoot + "\\CommerceEngine",
     commerceDatabasePath: ".\\src\\Project\\Retail\\Database"
   };
