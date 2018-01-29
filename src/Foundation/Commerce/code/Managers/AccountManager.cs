@@ -37,6 +37,7 @@ using Sitecore.Foundation.Commerce.Models.InputModels;
 using Sitecore.Foundation.Dictionary.Repositories;
 using Sitecore.Security.Authentication;
 using CommerceUser = Sitecore.Commerce.Entities.Customers.CommerceUser;
+using Sitecore.Foundation.Accounts.Pipelines;
 
 namespace Sitecore.Foundation.Commerce.Managers
 {
@@ -49,12 +50,16 @@ namespace Sitecore.Foundation.Commerce.Managers
             MailManager = mailManager;
             StorefrontContext = storefrontContext;
             this.CartManager = cartManager;
+            //added Habitat pipeline service
+            AccountsPipelineService = new PipelineService();
         }
 
         private MailManager MailManager { get; }
         private CustomerServiceProvider CustomerServiceProvider { get; }
         private ContactFactory ContactFactory { get; }
         private StorefrontContext StorefrontContext { get; }
+        private PipelineService AccountsPipelineService { get; }
+
         /// <summary>
         /// Gets or sets the cart manager.
         /// </summary>
@@ -73,11 +78,13 @@ namespace Sitecore.Foundation.Commerce.Managers
             {
                 return false;
             }
-            if (Tracker.Current != null)
-            {
-                Tracker.Current.Session.Identify(userName);
-            }
-
+            //disabled as this will be taken care of in the pipelines
+            //if (Tracker.Current != null)
+            //{
+            //    Tracker.Current.Session.Identify(userName);
+            //}
+            var user = AuthenticationManager.GetActiveUser();
+            this.AccountsPipelineService.RunLoggedIn(user);
             return true;
         }
 
@@ -90,11 +97,13 @@ namespace Sitecore.Foundation.Commerce.Managers
             {
                 return false;
             }
-            if (Tracker.Current != null)
-            {
-                Tracker.Current.Session.Identify(userName);
-            }
-
+            //disabled as this will be taken care of in the pipelines
+            //if (Tracker.Current != null)
+            //{
+            //    Tracker.Current.Session.Identify(userName);
+            //}
+            var user = AuthenticationManager.GetActiveUser();
+            this.AccountsPipelineService.RunLoggedIn(user);
             return true;
         }
 
@@ -123,8 +132,12 @@ namespace Sitecore.Foundation.Commerce.Managers
             {
                 Tracker.Current.EndVisit(true);
             }
+            var user = AuthenticationManager.GetActiveUser();
+            AuthenticationManager.Logout();
             System.Web.HttpContext.Current.Session.Abandon();
             AuthenticationManager.Logout();
+            if (user != null)
+                this.AccountsPipelineService.RunLoggedOut(user);
         }
 
         public ManagerResponse<GetUserResult, CommerceUser> GetUser(string userName)
@@ -136,7 +149,7 @@ namespace Sitecore.Foundation.Commerce.Managers
             if (!result.Success || result.CommerceUser == null)
             {
                 var message = DictionaryPhraseRepository.Current.Get("/System Messages/Account Manager/User Not Found Error", "The email address does not exists");
-                result.SystemMessages.Add(new SystemMessage {Message = message});
+                result.SystemMessages.Add(new SystemMessage { Message = message });
             }
 
             result.WriteToSitecoreLog();
@@ -149,11 +162,11 @@ namespace Sitecore.Foundation.Commerce.Managers
 
             if (commerceUser == null)
             {
-                return new ManagerResponse<DeleteUserResult, bool>(new DeleteUserResult {Success = false}, false);
+                return new ManagerResponse<DeleteUserResult, bool>(new DeleteUserResult { Success = false }, false);
             }
 
             // NOTE: we do not need to call DeleteCustomer because this will delete the commerce server user under the covers
-            var request = new DeleteUserRequest(new CommerceUser {UserName = userName});
+            var request = new DeleteUserRequest(new CommerceUser { UserName = userName });
             var result = CustomerServiceProvider.DeleteUser(request);
 
             result.WriteToSitecoreLog();
@@ -181,8 +194,8 @@ namespace Sitecore.Foundation.Commerce.Managers
                 }
                 catch (Exception ex)
                 {
-                    result = new UpdateUserResult {Success = false};
-                    result.SystemMessages.Add(new SystemMessage {Message = ex.Message + "/" + ex.StackTrace});
+                    result = new UpdateUserResult { Success = false };
+                    result.SystemMessages.Add(new SystemMessage { Message = ex.Message + "/" + ex.StackTrace });
                 }
             }
             else
@@ -190,8 +203,8 @@ namespace Sitecore.Foundation.Commerce.Managers
                 // user is authenticated, but not in the CommerceUsers domain - probably here because we are in edit or preview mode
                 var message = DictionaryPhraseRepository.Current.Get("/System Messages/Account Manager/Update User Profile Error", "Cannot update profile details for user {0}.");
                 message = string.Format(message, Context.User.LocalName);
-                result = new UpdateUserResult {Success = false};
-                result.SystemMessages.Add(new SystemMessage {Message = message});
+                result = new UpdateUserResult { Success = false };
+                result.SystemMessages.Add(new SystemMessage { Message = message });
             }
 
             result.WriteToSitecoreLog();
@@ -212,7 +225,7 @@ namespace Sitecore.Foundation.Commerce.Managers
 
         public ManagerResponse<GetPartiesResult, IEnumerable<IParty>> GetCustomerParties(string userName)
         {
-            var result = new GetPartiesResult {Success = false};
+            var result = new GetPartiesResult { Success = false };
             var getUserResponse = GetUser(userName);
             if (!getUserResponse.ServiceProviderResult.Success || getUserResponse.Result == null)
             {
@@ -220,7 +233,7 @@ namespace Sitecore.Foundation.Commerce.Managers
                 return new ManagerResponse<GetPartiesResult, IEnumerable<IParty>>(result, null);
             }
 
-            return GetParties(new CommerceCustomer {ExternalId = getUserResponse.Result.ExternalId});
+            return GetParties(new CommerceCustomer { ExternalId = getUserResponse.Result.ExternalId });
         }
 
         /// <summary>
@@ -255,13 +268,13 @@ namespace Sitecore.Foundation.Commerce.Managers
             var getUserResponse = GetUser(userName);
             if (getUserResponse.Result == null)
             {
-                var customerResult = new CustomerResult {Success = false};
+                var customerResult = new CustomerResult { Success = false };
                 customerResult.SystemMessages.ToList().AddRange(getUserResponse.ServiceProviderResult.SystemMessages);
                 return new ManagerResponse<CustomerResult, bool>(customerResult, false);
             }
 
-            var customer = new CommerceCustomer {ExternalId = getUserResponse.Result.ExternalId};
-            var parties = new List<CommerceParty> {new CommerceParty {ExternalId = addressExternalId}};
+            var customer = new CommerceCustomer { ExternalId = getUserResponse.Result.ExternalId };
+            var parties = new List<CommerceParty> { new CommerceParty { ExternalId = addressExternalId } };
 
             return RemoveParties(customer, parties);
         }
@@ -276,7 +289,7 @@ namespace Sitecore.Foundation.Commerce.Managers
             {
                 throw new ArgumentException("User not found, invalid userName", nameof(userName));
             }
-            var customer = new CommerceCustomer {ExternalId = getUserResponse.Result.ExternalId};
+            var customer = new CommerceCustomer { ExternalId = getUserResponse.Result.ExternalId };
             var request = new UpdatePartiesRequest(customer, parties.Select(p => p.ToCommerceParty()).ToList());
             var result = CustomerServiceProvider.UpdateParties(request);
             result.WriteToSitecoreLog();
@@ -340,7 +353,7 @@ namespace Sitecore.Foundation.Commerce.Managers
             if (!result.Success && !result.SystemMessages.Any())
             {
                 var message = DictionaryPhraseRepository.Current.Get("/System Messages/Accounts/Password Could Not Be Reset", "Your password could not be reset. Please verify the data you entered");
-                result.SystemMessages.Add(new SystemMessage {Message = message});
+                result.SystemMessages.Add(new SystemMessage { Message = message });
             }
 
             result.WriteToSitecoreLog();
@@ -353,7 +366,7 @@ namespace Sitecore.Foundation.Commerce.Managers
             Assert.ArgumentNotNull(inputModel, nameof(inputModel));
             Assert.ArgumentNotNullOrEmpty(inputModel.Email, nameof(inputModel.Email));
 
-            var result = new UpdatePasswordResult {Success = true};
+            var result = new UpdatePasswordResult { Success = true };
 
             var getUserResponse = GetUser(inputModel.Email);
             if (!getUserResponse.ServiceProviderResult.Success || getUserResponse.Result == null)
@@ -378,13 +391,13 @@ namespace Sitecore.Foundation.Commerce.Managers
                     {
                         var message = DictionaryPhraseRepository.Current.Get("/System Messages/Accounts/Could Not Send Email Error", "Sorry, the email could not be sent");
                         result.Success = false;
-                        result.SystemMessages.Add(new SystemMessage {Message = message});
+                        result.SystemMessages.Add(new SystemMessage { Message = message });
                     }
                 }
                 catch (Exception e)
                 {
                     result.Success = false;
-                    result.SystemMessages.Add(new SystemMessage {Message = e.Message});
+                    result.SystemMessages.Add(new SystemMessage { Message = e.Message });
                 }
 
                 result.WriteToSitecoreLog();
@@ -400,7 +413,7 @@ namespace Sitecore.Foundation.Commerce.Managers
             var userPartiesResponse = GetCustomerParties(userName);
             if (userPartiesResponse.ServiceProviderResult.Success)
             {
-                var customerResult = new CustomerResult {Success = false};
+                var customerResult = new CustomerResult { Success = false };
                 customerResult.SystemMessages.ToList().AddRange(userPartiesResponse.ServiceProviderResult.SystemMessages);
                 return new ManagerResponse<CustomerResult, bool>(customerResult, false);
             }
