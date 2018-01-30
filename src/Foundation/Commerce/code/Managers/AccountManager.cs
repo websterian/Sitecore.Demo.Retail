@@ -133,7 +133,6 @@ namespace Sitecore.Foundation.Commerce.Managers
                 Tracker.Current.EndVisit(true);
             }
             var user = AuthenticationManager.GetActiveUser();
-            AuthenticationManager.Logout();
             System.Web.HttpContext.Current.Session.Abandon();
             AuthenticationManager.Logout();
             if (user != null)

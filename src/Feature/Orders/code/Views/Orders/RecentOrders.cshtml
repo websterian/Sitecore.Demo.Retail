@@ -41,7 +41,7 @@
         <tbody data-bind="foreach: orders">
             <tr data-bind="css: { 'odd': $index() % 2 == 0 }">
                 <td><a data-bind="attr:{ href: detailsUrl }, text: lastModified"></a></td>
-                <td><a data-bind="attr:{ href: detailsUrl }, text: orderId"></a></td>
+                <td><a data-bind="attr:{ href: detailsUrl }, text: externalId"></a></td>
                 <td><a data-bind="attr:{ href: detailsUrl }, text: status"></a></td>
                 <td><a data-bind="attr:{ href: detailsUrl }"><span class="glyphicon glyphicon-search" aria-hidden="true"></span></a></td>
             </tr>
